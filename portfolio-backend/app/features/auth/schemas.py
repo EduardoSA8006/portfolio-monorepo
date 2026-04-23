@@ -7,6 +7,7 @@ class LoginRequest(BaseModel):
     # RFC 5321 caps addresses at 254 characters — 200 would reject valid emails.
     email: EmailStr = Field(..., max_length=254)
     password: str = Field(..., min_length=8)
+    captcha_token: str | None = Field(default=None, max_length=4096)
 
 
 class LoginResponse(BaseModel):
@@ -72,3 +73,8 @@ class TOTPDisableRequest(BaseModel):
         if not v.isdigit():
             raise ValueError("code must be 6 digits")
         return v
+
+
+class AuthConfigResponse(BaseModel):
+    """Public config needed by the admin login frontend."""
+    hcaptcha_site_key: str
