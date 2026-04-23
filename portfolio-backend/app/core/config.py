@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PLACEHOLDER_FRAGMENTS = ("change-me", "change_me", "example", "placeholder", "secret", "dummy")
 _MIN_SECRET_LENGTH = 32
+_VALID_APP_ENVS = frozenset({"development", "test", "production"})
+_VALID_SAMESITE = frozenset({"lax", "strict", "none"})
 
 
 def _validate_secret(name: str, value: str) -> str:
@@ -120,11 +122,74 @@ class Settings(BaseSettings):
                 ) from exc
         return v
 
+    @field_validator("APP_ENV")
+    @classmethod
+    def _validate_app_env(cls, v: str) -> str:
+        if v not in _VALID_APP_ENVS:
+            raise ValueError(
+                f"APP_ENV must be one of {sorted(_VALID_APP_ENVS)}, got {v!r}"
+            )
+        return v
+
+    @field_validator("COOKIE_SAMESITE")
+    @classmethod
+    def _validate_cookie_samesite(cls, v: str) -> str:
+        if v not in _VALID_SAMESITE:
+            raise ValueError(
+                f"COOKIE_SAMESITE must be one of {sorted(_VALID_SAMESITE)} "
+                f"(lowercase), got {v!r}"
+            )
+        return v
+
+    @field_validator("ALLOWED_ORIGINS")
+    @classmethod
+    def _validate_allowed_origins(cls, v: list[str]) -> list[str]:
+        if "*" in v:
+            raise ValueError(
+                'ALLOWED_ORIGINS must not contain "*" — wildcard is incompatible '
+                "with allow_credentials=True and defeats CSRF defense via Origin"
+            )
+        return v
+
+    @field_validator("ALLOWED_HOSTS")
+    @classmethod
+    def _validate_allowed_hosts(cls, v: list[str]) -> list[str]:
+        if "*" in v:
+            raise ValueError(
+                'ALLOWED_HOSTS must not contain "*" — wildcard disables the '
+                "TrustedHostMiddleware defense against Host header poisoning"
+            )
+        return v
+
     @model_validator(mode="after")
     def _validate_proxy_header_dependency(self) -> "Settings":
         if self.TRUST_PROXY_HEADERS and not self.TRUSTED_PROXY_CIDRS:
             raise ValueError(
                 "TRUSTED_PROXY_CIDRS must be non-empty when TRUST_PROXY_HEADERS=True"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_production_requires_cookie_secure(self) -> "Settings":
+        if self.APP_ENV == "production" and not self.COOKIE_SECURE:
+            raise ValueError(
+                "COOKIE_SECURE must be True in production — "
+                "HTTP cookies cannot be sent over the same-site boundary securely"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_session_lifetimes(self) -> "Settings":
+        if self.SESSION_MAX_AGE_SECONDS < self.SESSION_ABSOLUTE_SECONDS:
+            raise ValueError(
+                "SESSION_MAX_AGE_SECONDS must be >= SESSION_ABSOLUTE_SECONDS — "
+                "otherwise the cookie expires in the browser before the server "
+                "session ends, producing spurious 401s"
+            )
+        if self.SESSION_IDLE_SECONDS > self.SESSION_ABSOLUTE_SECONDS:
+            raise ValueError(
+                "SESSION_IDLE_SECONDS must be <= SESSION_ABSOLUTE_SECONDS — "
+                "idle timeout cannot outlive absolute lifetime"
             )
         return self
 
