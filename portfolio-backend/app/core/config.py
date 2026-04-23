@@ -83,6 +83,17 @@ class Settings(BaseSettings):
     LOGIN_WINDOW_SECONDS: int = 900   # 15 min sliding window per IP+email
     LOGIN_LOCKOUT_SECONDS: int = 1800  # 30 min global lockout per email
 
+    # hCaptcha — required in production, optional in development
+    HCAPTCHA_SITE_KEY: str = ""
+    HCAPTCHA_SECRET_KEY: str = ""
+    HCAPTCHA_VERIFY_URL: str = "https://api.hcaptcha.com/siteverify"
+    HCAPTCHA_TIMEOUT_SECONDS: float = 3.0
+
+    # Login rate-limit extensions (multi-IP lockout + degraded mode)
+    LOGIN_LOCKOUT_DISTINCT_IPS: int = 3
+    LOGIN_LOCKOUT_WINDOW_SECONDS: int = 1800
+    LOGIN_MAX_ATTEMPTS_DEGRADED: int = 2
+
     # TOTP / MFA
     TOTP_ISSUER: str = "Portfolio Admin"
     MFA_CHALLENGE_TTL_SECONDS: int = 300  # 5 minutes between step-1 and step-2
@@ -202,6 +213,15 @@ class Settings(BaseSettings):
                 "SESSION_IDLE_SECONDS must be <= SESSION_ABSOLUTE_SECONDS — "
                 "idle timeout cannot outlive absolute lifetime"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_production_requires_hcaptcha(self) -> "Settings":
+        if self.APP_ENV == "production":
+            if not self.HCAPTCHA_SITE_KEY or not self.HCAPTCHA_SECRET_KEY:
+                raise ValueError(
+                    "HCAPTCHA_SITE_KEY and HCAPTCHA_SECRET_KEY must be set in production"
+                )
         return self
 
 
