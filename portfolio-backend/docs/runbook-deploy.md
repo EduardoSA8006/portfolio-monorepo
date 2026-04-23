@@ -57,11 +57,12 @@ cp .env.example .env
 $EDITOR .env
 ```
 
-Preencher no `.env`:
+Preencher no `.env` (gerar **senhas distintas** para cada serviço):
 
 - `SECRET_KEY` e `EMAIL_PEPPER` (saída dos comandos acima)
 - `POSTGRES_PASSWORD`, `DATABASE_URL`, `DATABASE_URL_SYNC` com a senha real
-- `REDIS_PASSWORD`, `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` idem
+- `REDIS_PASSWORD`, `REDIS_URL` — instância de sessões (apontando para host `redis`)
+- `CELERY_REDIS_PASSWORD`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` — instância **dedicada** do Celery (apontando para host `redis_celery`)
 - `APP_ENV=production`
 - `COOKIE_SECURE=true`
 - `COOKIE_SAMESITE=lax`
@@ -69,6 +70,8 @@ Preencher no `.env`:
 - `TRUSTED_PROXY_CIDRS=["172.28.0.0/16"]`
 - `ALLOWED_ORIGINS=["https://eduardoalves.online"]`
 - `ALLOWED_HOSTS=["api.eduardoalves.online"]`
+
+**Importante:** `REDIS_PASSWORD` e `CELERY_REDIS_PASSWORD` devem ser **diferentes**. Cada senha protege uma instância Redis distinta em redes Docker separadas (sessions_net vs celery_net), de modo que um comprometimento do worker Celery não alcance chaves `auth:session:*`.
 
 ## 3. Criar a rede Docker `edge`
 
@@ -209,6 +212,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 - **Atualizar o Traefik:** `cd /srv/traefik && docker compose pull && docker compose up -d`.
 - **Backup do DB:** `docker exec portfolio_postgres pg_dump -U portfolio portfolio > backup-$(date +%F).sql` (rodar em cron; fora do escopo deste runbook).
 - **Logs:** `docker compose -f docker-compose.prod.yml logs -f api`.
+- **Isolamento Redis:** há duas instâncias — `portfolio_redis` (sessões) e `portfolio_redis_celery` (broker/resultado). Ficam em redes Docker separadas (`sessions_net` e `celery_net`); cada uma tem uma senha. Nunca apontar `CELERY_BROKER_URL` para `redis:6379` — isso recoloca o risco de task poisoning atingir sessões.
 
 ## Troubleshooting
 

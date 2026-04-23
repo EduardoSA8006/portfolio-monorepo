@@ -9,6 +9,11 @@ services:
     ports:
       - "6379:6379"
 
+  redis_celery:
+    ports:
+      # Different host port so both Redis instances can be inspected locally.
+      - "6380:6379"
+
   api:
     # In dev we publish 8000 on the host so the local frontend can hit it
     # directly — no Traefik, no TLS. Production never goes through this file.
@@ -26,11 +31,11 @@ services:
       COOKIE_SAMESITE: "lax"
       TRUST_PROXY_HEADERS: "false"
       TRUSTED_PROXY_CIDRS: '["127.0.0.1/32"]'
-    # Override networks so dev does NOT try to join the external `edge` network.
-    # Without !override, Compose would append `edge` from prod and fail because
-    # the dev machine has no Traefik stack.
+    # Override so dev does NOT try to join the external `edge` network.
+    # Keep data_net (postgres) and sessions_net (redis).
     networks: !override
-      - portfolio_net
+      - data_net
+      - sessions_net
 
   celery:
     read_only: false

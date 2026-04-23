@@ -27,17 +27,16 @@ services:
           cpus: "1.0"
           memory: "512M"
     networks:
-      - portfolio_net
+      - data_net
 
   redis:
     image: redis:7-alpine
     container_name: portfolio_redis
     restart: unless-stopped
-    # Session, Celery broker, and result backend share this instance via separate
-    # logical DBs (0 / 1 / 2). For production, point CELERY_BROKER_URL and
-    # CELERY_RESULT_BACKEND at a dedicated Redis instance with its own requirepass
-    # so that a Celery compromise cannot reach auth:session:* keys.
-    # Fail-closed on missing REDIS_PASSWORD — see POSTGRES_PASSWORD above.
+    # Sessions / rate-limit / MFA challenges live here. The Celery worker does
+    # NOT have access to this instance — it uses redis_celery instead, on a
+    # different Docker network, with a different requirepass. A compromised
+    # Celery task therefore cannot scan or rewrite auth:session:* keys.
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required — refusing to start with a default}
     expose:
       - "6379"
@@ -56,7 +55,33 @@ services:
           cpus: "1.0"
           memory: "512M"
     networks:
-      - portfolio_net
+      - sessions_net
+
+  redis_celery:
+    image: redis:7-alpine
+    container_name: portfolio_redis_celery
+    restart: unless-stopped
+    # Dedicated broker + result backend for Celery. Isolated on celery_net so
+    # the API container has no route to it.
+    command: redis-server --appendonly yes --requirepass ${CELERY_REDIS_PASSWORD:?CELERY_REDIS_PASSWORD is required — refusing to start with a default}
+    expose:
+      - "6379"
+    volumes:
+      - redis_celery_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${CELERY_REDIS_PASSWORD:?CELERY_REDIS_PASSWORD is required}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
+    networks:
+      - celery_net
 
   api:
     build:
@@ -85,8 +110,12 @@ services:
         limits:
           cpus: "1.0"
           memory: "512M"
+    # API talks to Postgres (data_net), sessions Redis (sessions_net), and
+    # faces the internet through Traefik (edge). It has NO route to
+    # redis_celery, by design.
     networks:
-      - portfolio_net
+      - data_net
+      - sessions_net
       - edge
     labels:
       - "traefik.enable=true"
@@ -109,7 +138,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+      redis_celery:
         condition: service_healthy
     read_only: true
     tmpfs:
@@ -121,15 +150,29 @@ services:
         limits:
           cpus: "1.0"
           memory: "512M"
+    # Celery needs Postgres for reads/writes from tasks, plus its own Redis.
+    # It has NO route to the sessions Redis — task poisoning cannot reach
+    # auth:session:* keys across the Docker network boundary.
     networks:
-      - portfolio_net
+      - data_net
+      - celery_net
 
 volumes:
   postgres_data:
   redis_data:
+  redis_celery_data:
 
 networks:
-  portfolio_net:
+  # data_net: Postgres lives here. API and Celery both join to read/write
+  # application data. DB is isolated from anything else.
+  data_net:
+    driver: bridge
+  # sessions_net: API <-> Redis (sessions, CSRF, rate-limits, MFA).
+  # Celery has no route here.
+  sessions_net:
+    driver: bridge
+  # celery_net: Celery <-> redis_celery. API has no route here.
+  celery_net:
     driver: bridge
   # `edge` is created externally (see scripts/create-edge-network.sh) so the
   # Traefik stack in /srv/traefik/ can share it. Subnet is pinned to
