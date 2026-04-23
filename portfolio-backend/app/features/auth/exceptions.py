@@ -65,3 +65,15 @@ class TOTPEnrollmentMissingError(AppException):
     status_code = 409
     detail = "No pending TOTP enrollment for this account"
     code = "AUTH_TOTP_ENROLLMENT_MISSING"
+
+
+class CaptchaRequiredError(AppException):
+    status_code = 401
+    detail = "Captcha verification required"
+    code = "AUTH_CAPTCHA_REQUIRED"
+
+
+class CaptchaInvalidError(AppException):
+    status_code = 401
+    detail = "Captcha verification failed"
+    code = "AUTH_CAPTCHA_INVALID"
