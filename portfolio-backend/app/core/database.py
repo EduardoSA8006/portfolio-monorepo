@@ -7,7 +7,11 @@ from app.core.config import settings
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.APP_ENV == "development",
+    # SQL echo is opt-in via DB_ECHO=true. Enabling it emits every query —
+    # including parameter values like email_hash — into stdout/loggers.
+    # Leaving it off by default avoids training the team to tolerate sensitive
+    # data in logs even in development.
+    echo=settings.DB_ECHO,
     pool_pre_ping=True,
 )
 

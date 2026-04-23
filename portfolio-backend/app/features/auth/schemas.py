@@ -1,36 +1,74 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from typing import Literal
 
-from app.shared.security import is_strong_password
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr = Field(..., max_length=200)
+    # RFC 5321 caps addresses at 254 characters — 200 would reject valid emails.
+    email: EmailStr = Field(..., max_length=254)
     password: str = Field(..., min_length=8)
-
-
-class AdminUserCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
-    email: EmailStr = Field(..., max_length=200)
-    password: str = Field(..., min_length=8)
-
-    @field_validator("password")
-    @classmethod
-    def validate_password_strength(cls, v: str) -> str:
-        if not is_strong_password(v):
-            raise ValueError(
-                "Password must be at least 8 characters and contain uppercase, "
-                "lowercase, digit, and special character"
-            )
-        return v
-
-
-class AdminUserResponse(BaseModel):
-    name: str
-    is_active: bool
-
-    model_config = {"from_attributes": True}
 
 
 class LoginResponse(BaseModel):
+    """
+    Response from POST /auth/login.
+
+    - status="ok"            → session established, csrf_token returned, cookie set.
+    - status="mfa_required"  → password was correct but TOTP is enabled.
+                                Call /auth/login/mfa with the mfa_challenge_token.
+    """
+    status: Literal["ok", "mfa_required"] = "ok"
+    csrf_token: str | None = None
+    mfa_challenge_token: str | None = None
+    message: str = "Login successful"
+
+
+class MFAVerifyRequest(BaseModel):
+    mfa_challenge_token: str = Field(..., min_length=16, max_length=128)
+    code: str = Field(..., min_length=6, max_length=6)
+
+    @field_validator("code")
+    @classmethod
+    def _digits_only(cls, v: str) -> str:
+        if not v.isdigit():
+            raise ValueError("code must be 6 digits")
+        return v
+
+
+class MFAVerifyResponse(BaseModel):
     csrf_token: str
     message: str = "Login successful"
+
+
+class TOTPEnrollResponse(BaseModel):
+    """
+    Returned by POST /auth/totp/enroll.
+
+    The secret and provisioning_uri are shown ONCE and must be entered into an
+    authenticator app (or rendered as a QR from provisioning_uri). Enrollment
+    is not complete until POST /auth/totp/confirm succeeds.
+    """
+    secret: str
+    provisioning_uri: str
+
+
+class TOTPConfirmRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+
+    @field_validator("code")
+    @classmethod
+    def _digits_only(cls, v: str) -> str:
+        if not v.isdigit():
+            raise ValueError("code must be 6 digits")
+        return v
+
+
+class TOTPDisableRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+
+    @field_validator("code")
+    @classmethod
+    def _digits_only(cls, v: str) -> str:
+        if not v.isdigit():
+            raise ValueError("code must be 6 digits")
+        return v

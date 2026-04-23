@@ -7,5 +7,4 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 dist/
-alembic/versions/*.py
-!alembic/versions/.gitkeep
+alembic/versions/__pycache__/

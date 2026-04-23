@@ -7,8 +7,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-portfolio}
       POSTGRES_USER: ${POSTGRES_USER:-portfolio}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-portfolio_secret}
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -16,6 +16,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
     networks:
       - portfolio_net
 
@@ -23,9 +30,13 @@ services:
     image: redis:7-alpine
     container_name: portfolio_redis
     restart: unless-stopped
+    # Session, Celery broker, and result backend share this instance via separate
+    # logical DBs (0 / 1 / 2). For production, point CELERY_BROKER_URL and
+    # CELERY_RESULT_BACKEND at a dedicated Redis instance with its own requirepass
+    # so that a Celery compromise cannot reach auth:session:* keys.
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secret}
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -33,6 +44,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
     networks:
       - portfolio_net
 
@@ -51,8 +69,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - .:/app
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
     networks:
       - portfolio_net
 
@@ -62,7 +88,7 @@ services:
       dockerfile: Dockerfile
     container_name: portfolio_celery
     restart: unless-stopped
-    command: celery -A app.worker worker --loglevel=info --concurrency=4
+    command: ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=4"]
     env_file:
       - .env
     depends_on:
@@ -70,8 +96,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - .:/app
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
     networks:
       - portfolio_net
 

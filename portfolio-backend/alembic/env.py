@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.core.database import Base
 
 # Import all models so Alembic detects them for autogenerate
-from app.features.auth.models import AdminUser  # noqa: F401
+from app.features.auth.models import AdminUser, AuthEvent  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)

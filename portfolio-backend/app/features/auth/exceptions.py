@@ -31,7 +31,37 @@ class CSRFValidationError(AppException):
     code = "AUTH_CSRF_INVALID"
 
 
-class TooManySessionsError(AppException):
+class TooManyAttemptsError(AppException):
     status_code = 429
-    detail = "Too many active sessions"
-    code = "AUTH_TOO_MANY_SESSIONS"
+    detail = "Too many login attempts — try again later"
+    code = "AUTH_TOO_MANY_ATTEMPTS"
+
+
+class MFAChallengeInvalidError(AppException):
+    status_code = 401
+    detail = "MFA challenge is invalid or expired"
+    code = "AUTH_MFA_CHALLENGE_INVALID"
+
+
+class TOTPInvalidError(AppException):
+    status_code = 401
+    detail = "Invalid authentication code"
+    code = "AUTH_TOTP_INVALID"
+
+
+class TOTPAlreadyEnabledError(AppException):
+    status_code = 409
+    detail = "TOTP is already enabled for this account"
+    code = "AUTH_TOTP_ALREADY_ENABLED"
+
+
+class TOTPNotEnabledError(AppException):
+    status_code = 409
+    detail = "TOTP is not enabled for this account"
+    code = "AUTH_TOTP_NOT_ENABLED"
+
+
+class TOTPEnrollmentMissingError(AppException):
+    status_code = 409
+    detail = "No pending TOTP enrollment for this account"
+    code = "AUTH_TOTP_ENROLLMENT_MISSING"

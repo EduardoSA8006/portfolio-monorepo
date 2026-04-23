@@ -1,0 +1,29 @@
+# Development overrides — applied automatically by Docker Compose.
+# Never commit secrets here. Add to .gitignore if this file contains env values.
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  api:
+    # read_only + bind mount for hot-reload: dev needs to write bytecode caches,
+    # so we disable read_only here. Production keeps read_only=true from the base file.
+    read_only: false
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - .:/app
+    environment:
+      APP_ENV: development
+      COOKIE_SECURE: "false"
+
+  celery:
+    read_only: false
+    command: ["celery", "-A", "app.worker", "worker", "--loglevel=debug", "--concurrency=2"]
+    volumes:
+      - .:/app
+    environment:
+      APP_ENV: development

@@ -17,7 +17,8 @@ dependencies = [
     "pydantic-settings (>=2.14.0,<3.0.0)",
     "python-multipart (>=0.0.26,<0.0.27)",
     "cryptography (>=46.0.7,<47.0.0)",
-    "bcrypt (>=5.0.0,<6.0.0)"
+    "argon2-cffi (>=25.1.0,<26.0.0)",
+    "pyotp (>=2.9.0,<3.0.0)",
 ]
 
 
@@ -32,3 +33,28 @@ dev = [
     "httpx (>=0.28.1,<0.29.0)",
     "ruff (>=0.15.11,<0.16.0)"
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+# E/W/F = pyflakes + pycodestyle, I = isort, B = bugbear, UP = pyupgrade,
+# S = flake8-bandit (security). SIM = flake8-simplify, RUF = Ruff-specific.
+select = ["E", "W", "F", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = [
+    "E501",   # line-too-long — delegated to the formatter
+    "B008",   # allow FastAPI's Depends() in default arguments
+    "S101",   # allow `assert` in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["S603", "S607"]   # scripts may invoke subprocesses
+"tests/*"   = ["S105", "S106"]   # fixture passwords are acceptable in tests
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra -q --strict-markers"
