@@ -45,9 +45,14 @@ app.add_middleware(
 )
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 if settings.TRUST_PROXY_HEADERS:
-    # trusted_hosts restricts which proxy IPs to trust.
-    # "*" accepts any upstream — tighten to your proxy CIDR in production.
-    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+    # trusted_hosts restricts which proxy IPs to trust. uvicorn's
+    # ProxyHeadersMiddleware accepts a list of IPs or CIDRs (natively since
+    # 0.32). Reading from TRUSTED_PROXY_CIDRS guarantees we never deploy
+    # with "*" — the validator in Settings rejects that value.
+    app.add_middleware(
+        ProxyHeadersMiddleware,
+        trusted_hosts=settings.TRUSTED_PROXY_CIDRS,
+    )
 
 register_exception_handlers(app)
 
