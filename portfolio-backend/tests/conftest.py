@@ -9,11 +9,11 @@ import os
 
 os.environ.setdefault(
     "SECRET_KEY",
-    "test-secret-key-0123456789abcdef0123456789abcdef0123456789abcdef",
+    "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123",
 )
 os.environ.setdefault(
     "EMAIL_PEPPER",
-    "test-email-pepper-0123456789abcdef0123456789abcdef0123456789abcdef",
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz9876",
 )
 os.environ.setdefault(
     "DATABASE_URL",

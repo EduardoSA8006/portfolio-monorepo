@@ -1,4 +1,6 @@
-from pydantic import field_validator
+import ipaddress
+
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PLACEHOLDER_FRAGMENTS = ("change-me", "change_me", "example", "placeholder", "secret", "dummy")
@@ -75,6 +77,12 @@ class Settings(BaseSettings):
     # is automatically set to the real client IP.
     TRUST_PROXY_HEADERS: bool = False
 
+    # CIDRs (or single IPs) that the proxy headers middleware trusts.
+    # X-Forwarded-For is only honored when the direct peer falls inside one
+    # of these ranges. Never use ["*"] in production — any client could then
+    # spoof the header and defeat rate limiting.
+    TRUSTED_PROXY_CIDRS: list[str] = ["127.0.0.1/32"]
+
     # CORS — list of allowed origins (JSON array in env: '["https://example.com"]')
     # Never use ["*"] with allow_credentials=True — browsers will reject it.
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
@@ -91,6 +99,31 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_email_pepper(cls, v: str) -> str:
         return _validate_secret("EMAIL_PEPPER", v)
+
+    @field_validator("TRUSTED_PROXY_CIDRS")
+    @classmethod
+    def _validate_trusted_proxy_cidrs(cls, v: list[str]) -> list[str]:
+        if "*" in v:
+            raise ValueError(
+                'TRUSTED_PROXY_CIDRS must not contain "*" — '
+                "specify concrete CIDRs or IPs"
+            )
+        for entry in v:
+            try:
+                ipaddress.ip_network(entry, strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    f"TRUSTED_PROXY_CIDRS entry {entry!r} is not a valid IP or CIDR"
+                ) from exc
+        return v
+
+    @model_validator(mode="after")
+    def _validate_proxy_header_dependency(self) -> "Settings":
+        if self.TRUST_PROXY_HEADERS and not self.TRUSTED_PROXY_CIDRS:
+            raise ValueError(
+                "TRUSTED_PROXY_CIDRS must be non-empty when TRUST_PROXY_HEADERS=True"
+            )
+        return self
 
 
 settings = Settings()
