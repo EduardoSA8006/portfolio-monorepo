@@ -55,9 +55,12 @@ class Settings(BaseSettings):
 
     COOKIE_NAME: str = "portfolio_session"
     COOKIE_SECURE: bool = True
-    # "strict" is correct when frontend and API share the same registrable domain.
-    # Change to "none" (with COOKIE_SECURE=True) only for cross-site topologies.
-    COOKIE_SAMESITE: str = "strict"
+    # 'lax' is the sweet spot for cross-origin requests between subdomains
+    # of the same registrable domain (our case: eduardoalves.online ↔
+    # api.eduardoalves.online). Use 'strict' only if there is no cross-origin
+    # interaction; use 'none' (with Secure=True) only for truly cross-site
+    # topologies with different eTLD+1.
+    COOKIE_SAMESITE: str = "lax"
     CSRF_HEADER_NAME: str = "X-CSRF-Token"
 
     # Rate limiting — login endpoint
