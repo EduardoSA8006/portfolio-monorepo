@@ -1,0 +1,59 @@
+# Traefik static configuration.
+# Runtime routing (hosts, services, middlewares) is discovered via Docker
+# provider from container labels in each app's docker-compose.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json
+  fields:
+    defaultMode: keep
+    headers:
+      defaultMode: drop
+      names:
+        User-Agent: keep
+        X-Forwarded-For: keep
+
+entryPoints:
+  web:
+    address: ":80"
+    # Every http:// request is redirected to https:// — permanent (301).
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    # Traefik listens on the Docker socket and discovers containers that
+    # carry `traefik.enable=true`. `exposedByDefault: false` is critical —
+    # otherwise any container with a default label gets exposed.
+    exposedByDefault: false
+    network: edge
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ${ACME_EMAIL}
+      storage: /acme.json
+      # HTTP-01 challenge: Let's Encrypt hits http://<domain>/.well-known/...
+      # Requires port 80 reachable from the internet and DNS pointing here.
+      httpChallenge:
+        entryPoint: web
+
+# Dashboard disabled by default. To enable, add a separate Host router
+# with basicauth middleware (see deploy/traefik/README.md).
+api:
+  dashboard: false
+  insecure: false

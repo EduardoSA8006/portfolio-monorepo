@@ -1,0 +1,30 @@
+# Traefik edge stack — copy this directory to /srv/traefik/ on the VPS.
+# See deploy/traefik/README.md and docs/runbook-deploy.md for setup steps.
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Read-only socket — Traefik only reads container labels, never creates.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./acme.json:/acme.json
+    env_file:
+      - .env
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
+    networks:
+      - edge
+
+networks:
+  edge:
+    external: true
