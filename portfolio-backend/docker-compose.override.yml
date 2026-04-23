@@ -10,6 +10,10 @@ services:
       - "6379:6379"
 
   api:
+    # In dev we publish 8000 on the host so the local frontend can hit it
+    # directly — no Traefik, no TLS. Production never goes through this file.
+    ports:
+      - "8000:8000"
     # read_only + bind mount for hot-reload: dev needs to write bytecode caches,
     # so we disable read_only here. Production keeps read_only=true from the base file.
     read_only: false
@@ -19,6 +23,14 @@ services:
     environment:
       APP_ENV: development
       COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: "lax"
+      TRUST_PROXY_HEADERS: "false"
+      TRUSTED_PROXY_CIDRS: '["127.0.0.1/32"]'
+    # Override networks so dev does NOT try to join the external `edge` network.
+    # Without !override, Compose would append `edge` from prod and fail because
+    # the dev machine has no Traefik stack.
+    networks: !override
+      - portfolio_net
 
   celery:
     read_only: false
