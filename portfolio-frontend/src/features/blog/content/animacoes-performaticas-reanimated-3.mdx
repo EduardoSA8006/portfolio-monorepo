@@ -1,0 +1,43 @@
+---
+title: "Animações performáticas no mobile com Reanimated 3"
+date: "2025-09-18"
+tags: ["react-native", "animations", "mobile"]
+readingTime: 7
+cover: "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=1600&q=80"
+excerpt: "Como atingir 60fps consistentes em Android de gama média usando Reanimated 3 — sem abrir mão de animações ricas."
+author: "Eduardo Alves"
+---
+
+Em apps React Native, o pior inimigo é o "jank" — aquele travamento de animação que só aparece no Android do primo. Reanimated 3 resolve isso rodando animações direto na UI thread.
+
+## O truque mental
+
+Em RN "clássico", animações vão e voltam pela bridge JS→Nativo a cada frame. Em Reanimated, você escreve "worklets" que rodam direto na UI thread. Zero bridge, zero jank.
+
+```tsx
+import { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+
+const offset = useSharedValue(0);
+
+const style = useAnimatedStyle(() => ({
+  transform: [{ translateX: offset.value }],
+}));
+
+const onPress = () => {
+  offset.value = withSpring(100);
+};
+```
+
+O `useAnimatedStyle` é um worklet. Nunca toca JS durante a animação.
+
+## Gestures
+
+Combine com `react-native-gesture-handler` e você tem drags fluidos, swipes nativos, tudo em UI thread.
+
+## Regras de ouro
+
+1. **Nunca anime `width`/`height`**. Use `transform: scale`. 10x mais rápido.
+2. **Evite `setState` durante gestos**. Use shared values.
+3. **Teste em Android gama média**, não só iPhone 15 Pro.
+
+Cheguei a 60fps consistentes até em Android Go seguindo essas regras.

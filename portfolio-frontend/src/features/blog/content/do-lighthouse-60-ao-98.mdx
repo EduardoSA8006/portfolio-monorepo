@@ -1,0 +1,40 @@
+---
+title: "Do Lighthouse 60 ao 98: otimizando um e-commerce Next.js"
+date: "2025-08-05"
+tags: ["performance", "next.js", "e-commerce"]
+readingTime: 10
+cover: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1600&q=80"
+excerpt: "Case real: recebi um e-commerce com Lighthouse 60 e tinha 3 semanas para levar a 95+. Eis o que funcionou (e o que foi ruído)."
+author: "Eduardo Alves"
+---
+
+Cliente ligou num pânico: "nosso Lighthouse caiu de 90 para 60 depois do último deploy, o tráfego orgânico sumiu". Três semanas depois, estávamos em 98. Timeline:
+
+## Semana 1 — Medir antes de mexer
+
+Rodei Chrome DevTools Performance profile em 3 páginas críticas (home, listagem, produto). Descobri:
+
+- **LCP 4.2s**: hero image sem `priority`.
+- **CLS 0.35**: banners injetados sem reservar espaço.
+- **TBT 680ms**: 400kb de JS de analytics carregando na thread principal.
+
+## Semana 2 — Ganhos fáceis
+
+1. `next/image` com `priority` e `sizes` corretos na hero: LCP 4.2s → 1.8s.
+2. Reservar espaço dos banners com `aspect-ratio`: CLS 0.35 → 0.02.
+3. Mover analytics para `next/script` com `strategy="afterInteractive"`: TBT 680ms → 180ms.
+
+Lighthouse subiu para 87 nessa semana. Sem mudar uma linha de negócio.
+
+## Semana 3 — Otimizações finas
+
+- Font subsetting + `display: swap`.
+- Pré-carregar fontes via `next/font`.
+- Bundle splitting: removi um `lodash` inteiro que era usado para 2 funções.
+- Server Components para listagens (eliminou 180kb de client-side state).
+
+Resultado final: **Lighthouse 98 em todas as páginas críticas**. Tráfego orgânico recuperou em 6 semanas.
+
+## Lição
+
+Não adianta "otimizar" sem medir. 80% do ganho vem de 20% dos problemas. Use Chrome DevTools antes de tocar em código.

@@ -1,0 +1,52 @@
+---
+title: "Construindo um design system com CSS variables e Tailwind v4"
+date: "2025-11-12"
+tags: ["css", "tailwind", "design-system"]
+readingTime: 6
+cover: "https://images.unsplash.com/photo-1507721999472-8ed4421c4af2?auto=format&fit=crop&w=1600&q=80"
+excerpt: "Como uso CSS variables com Tailwind v4 para criar design systems flexíveis, com tema escuro, tokens semânticos e zero fricção com dark mode."
+author: "Eduardo Alves"
+---
+
+Tailwind v4 trouxe mudanças fundamentais — agora os tokens vivem em `@theme` e consomem CSS variables nativas. Esse casamento é poderoso: tipografia consistente, temas trocáveis em runtime, zero JS.
+
+## O problema
+
+Antes, alternar entre temas custava plugins, configs ou classes duplicadas (`text-white dark:text-slate-100`). Em projetos grandes, isso vira dívida técnica rápido.
+
+## A solução
+
+Declaro tokens uma vez em `:root` e apontando para eles no bloco `@theme`. A Tailwind gera classes automaticamente. O tema vira um único arquivo de CSS.
+
+```css
+:root {
+  --bg-base: #05080f;
+  --text-primary: #e4e8ef;
+  --blue-500: #3b82f6;
+}
+
+@theme {
+  --color-bg-base: var(--bg-base);
+  --color-text-primary: var(--text-primary);
+  --color-blue-500: var(--blue-500);
+}
+```
+
+Agora `bg-bg-base`, `text-text-primary` e `text-blue-500` funcionam nativamente.
+
+## Troca de tema
+
+Basta sobrescrever as variáveis em um seletor diferente:
+
+```css
+[data-theme="light"] {
+  --bg-base: #ffffff;
+  --text-primary: #0a0e1a;
+}
+```
+
+Zero JS, zero flash. O navegador troca as variáveis e a página inteira responde.
+
+## Conclusão
+
+Design systems com CSS variables + Tailwind v4 são hoje o caminho mais limpo. Tokens semânticos, temas nativos, portabilidade entre projetos. Recomendo migrar.

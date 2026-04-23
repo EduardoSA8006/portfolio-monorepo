@@ -1,0 +1,134 @@
+/* ================================================================
+ * Design tokens
+ * Two independent axes on <html>:
+ *   data-theme-mode: 'dark' (default) | 'light'
+ *   data-theme     : 'blue' (default) | 'purple'
+ * ================================================================ */
+
+/* ---------- Mode-agnostic shared tokens ---------- */
+:root {
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 200ms;
+  --dur-base: 300ms;
+  --dur-slow: 600ms;
+}
+
+/* ---------- DARK MODE (default) ---------- */
+:root,
+[data-theme-mode='dark'] {
+  --bg-base: #05080f;
+  --bg-surface: #0a0e1a;
+  --bg-elevated: #111827;
+  --bg-glass: rgba(15, 23, 42, 0.28);
+
+  --text-primary: #e4e8ef;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --text-on-primary: #ffffff;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+
+  --surface-raised: rgba(255, 255, 255, 0.03);
+  --surface-raised-hover: rgba(255, 255, 255, 0.06);
+
+  --shadow-card: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+  --shadow-glass: 0 30px 60px -20px rgba(0, 0, 0, 0.6);
+
+  --aurora-opacity: 1;
+  --particle-opacity: 0.6;
+}
+
+/* ---------- LIGHT MODE ---------- */
+[data-theme-mode='light'] {
+  --bg-base: #f6f7fb;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.65);
+
+  --text-primary: #0a0e1a;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+  --text-on-primary: #ffffff;
+
+  --border: rgba(10, 14, 26, 0.09);
+  --border-strong: rgba(10, 14, 26, 0.18);
+
+  --surface-raised: rgba(10, 14, 26, 0.03);
+  --surface-raised-hover: rgba(10, 14, 26, 0.06);
+
+  --shadow-card: 0 10px 40px -10px rgba(10, 14, 26, 0.12);
+  --shadow-glass: 0 20px 50px -20px rgba(10, 14, 26, 0.15);
+
+  --aurora-opacity: 0.55;
+  --particle-opacity: 0.4;
+}
+
+/* ---------- COLOR: BLUE (default) ---------- */
+:root,
+[data-theme='blue'] {
+  --blue-50: #eff6ff;
+  --blue-300: #93c5fd;
+  --blue-400: #60a5fa;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --blue-700: #1d4ed8;
+
+  --primary-300-rgb: 147, 197, 253;
+  --primary-400-rgb: 96, 165, 250;
+  --primary-500-rgb: 59, 130, 246;
+  --primary-600-rgb: 37, 99, 235;
+  --primary-700-rgb: 29, 78, 216;
+
+  --gradient-text: linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #93c5fd 100%);
+  --gradient-btn: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  --gradient-border: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(147, 197, 253, 0.2));
+
+  --aurora-blob-1: radial-gradient(circle, #3b82f6 0%, transparent 70%);
+  --aurora-blob-2: radial-gradient(circle, #1d4ed8 0%, transparent 70%);
+  --aurora-blob-3: radial-gradient(circle, #60a5fa 0%, transparent 70%);
+
+  --cursor-glow: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+
+  --shadow-glow: 0 10px 30px -10px rgba(59, 130, 246, 0.5);
+
+  --logo-accent: var(--blue-400);
+  --logo-accent-strong: var(--blue-500);
+  --logo-accent-glow: 0 0 14px rgba(96, 165, 250, 0.55);
+}
+
+/* ---------- COLOR: PURPLE ---------- */
+[data-theme='purple'] {
+  --blue-50: #f5f3ff;
+  --blue-300: #c4b5fd;
+  --blue-400: #a78bfa;
+  --blue-500: #8b5cf6;
+  --blue-600: #7c3aed;
+  --blue-700: #6d28d9;
+
+  --primary-300-rgb: 196, 181, 253;
+  --primary-400-rgb: 167, 139, 250;
+  --primary-500-rgb: 139, 92, 246;
+  --primary-600-rgb: 124, 58, 237;
+  --primary-700-rgb: 109, 40, 217;
+
+  --gradient-text: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 50%, #c4b5fd 100%);
+  --gradient-btn: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  --gradient-border: linear-gradient(135deg, rgba(139, 92, 246, 0.5), rgba(196, 181, 253, 0.2));
+
+  --aurora-blob-1: radial-gradient(circle, #8b5cf6 0%, transparent 70%);
+  --aurora-blob-2: radial-gradient(circle, #6d28d9 0%, transparent 70%);
+  --aurora-blob-3: radial-gradient(circle, #a78bfa 0%, transparent 70%);
+
+  --cursor-glow: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+
+  --shadow-glow: 0 10px 30px -10px rgba(139, 92, 246, 0.5);
+  --logo-accent-glow: 0 0 14px rgba(167, 139, 250, 0.55);
+}
+
+/* ---------- Body + transition ---------- */
+html {
+  transition:
+    background-color 350ms var(--ease-out-expo),
+    color 350ms var(--ease-out-expo);
+}

@@ -1,0 +1,125 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+@import "../styles/prose.css";
+
+@theme {
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-blue-50: var(--blue-50);
+  --color-blue-300: var(--blue-300);
+  --color-blue-400: var(--blue-400);
+  --color-blue-500: var(--blue-500);
+  --color-blue-600: var(--blue-600);
+  --color-blue-700: var(--blue-700);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border-subtle: var(--border);
+  --color-border-strong: var(--border-strong);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+}
+
+p {
+  text-align: justify;
+  text-align-last: left;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+
+/* In light mode, any `text-white` that isn't explicitly opted out via
+ * `.text-on-primary` becomes the primary text token so headings/labels
+ * on page background stay legible. Elements painted over a colored
+ * gradient/solid bg (buttons, badges, avatars) should add `text-on-primary`
+ * alongside `text-white` to keep pure white in both modes. */
+[data-theme-mode='light'] .text-white:not(.text-on-primary) {
+  color: var(--text-primary);
+}
+
+.text-on-primary {
+  color: #ffffff !important;
+}
+
+/* In light mode only, flip every white-translucency Tailwind class to a
+ * matching dark translucency so cards/borders/dots don't disappear on
+ * the near-white background. Dark mode is untouched. */
+[data-theme-mode='light'] .bg-white\/\[0\.02\] { background-color: rgba(10, 14, 26, 0.03); }
+[data-theme-mode='light'] .bg-white\/\[0\.03\] { background-color: rgba(10, 14, 26, 0.035); }
+[data-theme-mode='light'] .bg-white\/\[0\.04\] { background-color: rgba(10, 14, 26, 0.04); }
+[data-theme-mode='light'] .bg-white\/\[0\.05\] { background-color: rgba(10, 14, 26, 0.05); }
+[data-theme-mode='light'] .bg-white\/\[0\.06\] { background-color: rgba(10, 14, 26, 0.06); }
+[data-theme-mode='light'] .bg-white\/\[0\.08\] { background-color: rgba(10, 14, 26, 0.08); }
+[data-theme-mode='light'] .bg-white\/20 { background-color: rgba(10, 14, 26, 0.22); }
+[data-theme-mode='light'] .bg-white\/40 { background-color: rgba(10, 14, 26, 0.4); }
+
+[data-theme-mode='light'] .border-white\/\[0\.06\] { border-color: rgba(10, 14, 26, 0.08); }
+[data-theme-mode='light'] .border-white\/\[0\.08\] { border-color: rgba(10, 14, 26, 0.1); }
+[data-theme-mode='light'] .border-white\/\[0\.1\] { border-color: rgba(10, 14, 26, 0.12); }
+[data-theme-mode='light'] .border-white\/\[0\.12\] { border-color: rgba(10, 14, 26, 0.14); }
+[data-theme-mode='light'] .border-white\/\[0\.15\] { border-color: rgba(10, 14, 26, 0.18); }
+[data-theme-mode='light'] .border-white\/\[0\.18\] { border-color: rgba(10, 14, 26, 0.2); }
+[data-theme-mode='light'] .border-white\/10 { border-color: rgba(10, 14, 26, 0.1); }
+[data-theme-mode='light'] .border-white\/20 { border-color: rgba(10, 14, 26, 0.22); }
+
+[data-theme-mode='light'] .hover\:bg-white\/\[0\.04\]:hover { background-color: rgba(10, 14, 26, 0.04); }
+[data-theme-mode='light'] .hover\:bg-white\/\[0\.05\]:hover { background-color: rgba(10, 14, 26, 0.05); }
+[data-theme-mode='light'] .hover\:bg-white\/\[0\.06\]:hover { background-color: rgba(10, 14, 26, 0.06); }
+[data-theme-mode='light'] .hover\:bg-white\/5:hover { background-color: rgba(10, 14, 26, 0.05); }
+[data-theme-mode='light'] .hover\:bg-white\/40:hover { background-color: rgba(10, 14, 26, 0.4); }
+[data-theme-mode='light'] .hover\:border-white\/\[0\.15\]:hover { border-color: rgba(10, 14, 26, 0.18); }
+[data-theme-mode='light'] .hover\:border-white\/\[0\.18\]:hover { border-color: rgba(10, 14, 26, 0.2); }
+[data-theme-mode='light'] .hover\:border-white\/20:hover { border-color: rgba(10, 14, 26, 0.22); }
+
+/* Particle canvas gets dimmer in light mode so it doesn't compete
+ * with content on white. */
+[data-theme-mode='light'] canvas.opacity-60 { opacity: 0.35; }
+
+:focus-visible {
+  outline: 2px solid var(--blue-400);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.35);
+  color: #fff;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.25); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.45); }
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 1rem;
+  background: var(--blue-500);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  z-index: 100;
+}
+.skip-link:focus { left: 1rem; }

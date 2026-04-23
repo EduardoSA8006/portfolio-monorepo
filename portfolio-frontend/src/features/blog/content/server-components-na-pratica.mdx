@@ -1,0 +1,63 @@
+---
+title: "Server Components na prática: quando usar (e quando não)"
+date: "2025-10-24"
+tags: ["next.js", "react", "performance"]
+readingTime: 8
+cover: "https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&w=1600&q=80"
+excerpt: "Server Components são a feature mais importante do React nos últimos 5 anos. Quando ganham, quando perdem, e os erros mais comuns que vejo em código."
+author: "Eduardo Alves"
+---
+
+RSC (React Server Components) é excelente — e fácil de usar errado. Depois de migrar 3 projetos, aqui vai o que aprendi.
+
+## Quando Server Components brilham
+
+- **Listagens de dados** (produtos, posts, projetos): fetch direto no componente, sem useEffect.
+- **Páginas majoritariamente estáticas** com pequenos bolsões interativos.
+- **SEO crítico**: HTML já vem renderizado, Googlebot adora.
+
+## Quando Client Components são inevitáveis
+
+- Qualquer coisa com state (`useState`, `useEffect`).
+- Event handlers (`onClick`, `onChange`).
+- Browser APIs (`window`, `localStorage`, `IntersectionObserver`).
+- Bibliotecas que dependem de DOM (Framer Motion, Mapbox, etc.).
+
+## Padrão que uso sempre
+
+Pages são sempre Server Components. Isolo a interatividade em "ilhas" Client:
+
+```tsx
+// page.tsx — Server Component
+import { ProductGrid } from './ProductGrid.client';
+import { getProducts } from '@/lib/db';
+
+export default async function Page() {
+  const products = await getProducts();
+  return <ProductGrid products={products} />;
+}
+```
+
+```tsx
+// ProductGrid.client.tsx — "use client"
+'use client';
+export function ProductGrid({ products }) {
+  // filter state, animations, etc.
+}
+```
+
+Fronteira clara, dados fluem do server para o client como props.
+
+## Erro comum
+
+Importar um Server Component dentro de um Client Component. Não funciona. Passe como `children` ou prop:
+
+```tsx
+<ClientWrapper>
+  <ServerComponent />
+</ClientWrapper>
+```
+
+## Conclusão
+
+Server Components são ganho líquido quando a fronteira é bem definida. Em projetos novos, default Server. Client só onde precisa.

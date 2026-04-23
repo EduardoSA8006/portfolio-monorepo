@@ -1,0 +1,45 @@
+---
+title: "TypeScript strict: o setup que todo projeto merece"
+date: "2025-07-14"
+tags: ["typescript", "dx", "best-practices"]
+readingTime: 5
+cover: "https://images.unsplash.com/photo-1517134191118-9d595e4c8c2b?auto=format&fit=crop&w=1600&q=80"
+excerpt: "`strict: true` é só o começo. Eis o `tsconfig` que uso em todo projeto novo — e por quê."
+author: "Eduardo Alves"
+---
+
+TypeScript "strict" tem mais de um nível. Em projetos novos, subo a régua logo de cara. Eis o `tsconfig` base:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true
+  }
+}
+```
+
+## `noUncheckedIndexedAccess`
+
+Muda `array[i]` de `T` para `T | undefined`. Parece chato, mas pega bugs reais:
+
+```ts
+const first = users[0]; // antes: User. agora: User | undefined
+first.name; // erro! obriga a checar.
+```
+
+## `exactOptionalPropertyTypes`
+
+Obriga distinção clara entre "propriedade ausente" e "propriedade com `undefined`". Evita confusão em APIs.
+
+## `noImplicitOverride`
+
+Obriga `override` explícito em classes que estendem. Previne "dead code" silencioso quando a classe pai muda.
+
+## Vale a pena?
+
+Sempre. O custo é alto nos primeiros dias (mais erros), mas em 2 semanas sua codebase está radicalmente mais segura. Vale em qualquer projeto que você pretende manter por mais de 3 meses.
