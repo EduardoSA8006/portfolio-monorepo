@@ -71,6 +71,33 @@ def test_trusted_proxy_headers_false_allows_empty_cidrs():
     assert s.TRUSTED_PROXY_CIDRS == []
 
 
+def test_readiness_allowed_cidrs_rejects_empty_list():
+    """/health/ready needs at least one trusted source."""
+    with pytest.raises(ValidationError, match="READINESS_ALLOWED_CIDRS"):
+        Settings(**_COMMON_KWARGS, READINESS_ALLOWED_CIDRS=[])
+
+
+def test_readiness_allowed_cidrs_rejects_wildcard():
+    """Readiness must not be exposed to every source."""
+    with pytest.raises(ValidationError, match='must not contain "\\*"'):
+        Settings(**_COMMON_KWARGS, READINESS_ALLOWED_CIDRS=["*"])
+
+
+def test_readiness_allowed_cidrs_rejects_invalid_entry():
+    """Invalid readiness CIDRs must fail at startup."""
+    with pytest.raises(ValidationError, match="not a valid IP or CIDR"):
+        Settings(**_COMMON_KWARGS, READINESS_ALLOWED_CIDRS=["not-an-ip"])
+
+
+def test_readiness_allowed_cidrs_accepts_valid_cidr_and_ip():
+    """Readiness allowlist accepts both CIDR ranges and single IPs."""
+    s = Settings(
+        **_COMMON_KWARGS,
+        READINESS_ALLOWED_CIDRS=["127.0.0.1/32", "::1/128", "172.28.0.0/16"],
+    )
+    assert s.READINESS_ALLOWED_CIDRS == ["127.0.0.1/32", "::1/128", "172.28.0.0/16"]
+
+
 def test_cookie_samesite_default_is_lax():
     """
     Default is 'lax' — works for the common case where frontend and API

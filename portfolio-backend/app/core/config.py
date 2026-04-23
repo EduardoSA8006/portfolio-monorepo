@@ -9,6 +9,19 @@ _VALID_APP_ENVS = frozenset({"development", "test", "production"})
 _VALID_SAMESITE = frozenset({"lax", "strict", "none"})
 
 
+def _validate_ip_networks(name: str, value: list[str], *, allow_empty: bool) -> list[str]:
+    if not allow_empty and not value:
+        raise ValueError(f"{name} must contain at least one CIDR or IP")
+    if "*" in value:
+        raise ValueError(f'{name} must not contain "*" — specify concrete CIDRs or IPs')
+    for entry in value:
+        try:
+            ipaddress.ip_network(entry, strict=False)
+        except ValueError as exc:
+            raise ValueError(f"{name} entry {entry!r} is not a valid IP or CIDR") from exc
+    return value
+
+
 def _validate_secret(name: str, value: str) -> str:
     if len(value) < _MIN_SECRET_LENGTH:
         raise ValueError(f"{name} must be at least {_MIN_SECRET_LENGTH} characters")
@@ -88,6 +101,11 @@ class Settings(BaseSettings):
     # spoof the header and defeat rate limiting.
     TRUSTED_PROXY_CIDRS: list[str] = ["127.0.0.1/32"]
 
+    # /health/ready is intentionally not public. Only callers in these CIDRs
+    # may query dependency state (DB/Redis). Add proxy/LB/internal ranges in
+    # deployment config as needed.
+    READINESS_ALLOWED_CIDRS: list[str] = ["127.0.0.1/32", "::1/128"]
+
     # CORS — list of allowed origins (JSON array in env: '["https://example.com"]')
     # Never use ["*"] with allow_credentials=True — browsers will reject it.
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
@@ -108,19 +126,12 @@ class Settings(BaseSettings):
     @field_validator("TRUSTED_PROXY_CIDRS")
     @classmethod
     def _validate_trusted_proxy_cidrs(cls, v: list[str]) -> list[str]:
-        if "*" in v:
-            raise ValueError(
-                'TRUSTED_PROXY_CIDRS must not contain "*" — '
-                "specify concrete CIDRs or IPs"
-            )
-        for entry in v:
-            try:
-                ipaddress.ip_network(entry, strict=False)
-            except ValueError as exc:
-                raise ValueError(
-                    f"TRUSTED_PROXY_CIDRS entry {entry!r} is not a valid IP or CIDR"
-                ) from exc
-        return v
+        return _validate_ip_networks("TRUSTED_PROXY_CIDRS", v, allow_empty=True)
+
+    @field_validator("READINESS_ALLOWED_CIDRS")
+    @classmethod
+    def _validate_readiness_allowed_cidrs(cls, v: list[str]) -> list[str]:
+        return _validate_ip_networks("READINESS_ALLOWED_CIDRS", v, allow_empty=False)
 
     @field_validator("APP_ENV")
     @classmethod

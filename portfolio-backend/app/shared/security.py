@@ -4,15 +4,28 @@ import hmac
 import re
 
 import pyotp
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
+from argon2 import PasswordHasher, Type
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from app.core.config import settings
 
-_ph = PasswordHasher()
+_ARGON2_TIME_COST = 3
+_ARGON2_MEMORY_COST_KIB = 65536
+_ARGON2_PARALLELISM = 4
+_ARGON2_HASH_LEN = 32
+_ARGON2_SALT_LEN = 16
+
+_ph = PasswordHasher(
+    time_cost=_ARGON2_TIME_COST,
+    memory_cost=_ARGON2_MEMORY_COST_KIB,
+    parallelism=_ARGON2_PARALLELISM,
+    hash_len=_ARGON2_HASH_LEN,
+    salt_len=_ARGON2_SALT_LEN,
+    type=Type.ID,
+)
 
 _PASSWORD_RE = re.compile(
     r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()\-_=+\[\]{};:'\",.<>?/\\|`~]).{8,}$"
@@ -41,6 +54,13 @@ def verify_password(plain: str, hashed: str) -> bool:
     try:
         return _ph.verify(hashed, plain)
     except (VerifyMismatchError, VerificationError, InvalidHashError):
+        return False
+
+
+def password_needs_rehash(hashed: str) -> bool:
+    try:
+        return _ph.check_needs_rehash(hashed)
+    except InvalidHashError:
         return False
 
 

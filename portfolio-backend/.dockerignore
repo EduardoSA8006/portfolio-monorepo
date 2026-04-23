@@ -13,8 +13,6 @@ __pycache__
 .mypy_cache
 *.egg-info
 dist/
-alembic/versions/
-scripts/
 tests/
 docker-compose*.yml
 Dockerfile

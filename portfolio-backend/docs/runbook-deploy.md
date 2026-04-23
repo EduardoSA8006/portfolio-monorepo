@@ -68,6 +68,7 @@ Preencher no `.env` (gerar **senhas distintas** para cada serviço):
 - `COOKIE_SAMESITE=lax`
 - `TRUST_PROXY_HEADERS=true`
 - `TRUSTED_PROXY_CIDRS=["172.28.0.0/16"]`
+- `READINESS_ALLOWED_CIDRS=["127.0.0.1/32","::1/128","172.28.0.0/16"]`
 - `ALLOWED_ORIGINS=["https://eduardoalves.online"]`
 - `ALLOWED_HOSTS=["api.eduardoalves.online"]`
 
@@ -157,7 +158,16 @@ erros de rate limit ou DNS.
 1. **Health readiness:**
    ```bash
    curl -s https://api.eduardoalves.online/health/ready
-   # Expected: {"status":"ok"}
+   # Expected: {"error":"FORBIDDEN","detail":"Forbidden"}
+
+   docker compose -f docker-compose.prod.yml exec api python - <<'PY'
+   import json
+   from urllib.request import urlopen
+
+   with urlopen("http://127.0.0.1:8000/health/ready") as response:
+       print(json.load(response))
+   PY
+   # Expected: {'status': 'ok'}
    ```
 
 2. **Host inválido rejeitado:**

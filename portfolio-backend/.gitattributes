@@ -1,0 +1,3 @@
+__pycache__/ export-ignore
+.pytest_cache/ export-ignore
+.ruff_cache/ export-ignore
