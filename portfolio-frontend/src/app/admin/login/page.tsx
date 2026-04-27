@@ -13,12 +13,19 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [siteKey, setSiteKey] = useState<string>("");
+  // siteKey tri-state:
+  //   null     => /auth/config not yet loaded (or load failed) — show placeholder
+  //   ""       => backend explicitly returned empty key (dev/no-captcha mode)
+  //   non-empty=> render the real hCaptcha widget
+  const [siteKey, setSiteKey] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAuthConfig()
       .then((cfg) => setSiteKey(cfg.hcaptcha_site_key))
-      .catch(() => setSiteKey(""));
+      .catch(() => {
+        // Leave siteKey as null on error so we don't accidentally surface the
+        // dev-bypass UI in production when /auth/config 5xx's.
+      });
   }, []);
 
   useEffect(() => {
@@ -69,13 +76,21 @@ export default function AdminLoginPage() {
           />
         </label>
 
-        {captchaRequired && (
-          <HCaptchaWidget
-            siteKey={siteKey}
-            onVerify={(token) => setCaptchaToken(token)}
-            onExpire={() => setCaptchaToken(null)}
-          />
-        )}
+        {captchaRequired &&
+          (siteKey === null ? (
+            <div
+              className="rounded border border-dashed border-neutral-700 px-3 py-2 text-xs text-neutral-500"
+              role="status"
+            >
+              Aguardando configuração de captcha…
+            </div>
+          ) : (
+            <HCaptchaWidget
+              siteKey={siteKey}
+              onVerify={(token) => setCaptchaToken(token)}
+              onExpire={() => setCaptchaToken(null)}
+            />
+          ))}
 
         {state.kind === "error" && (
           <p className="text-sm text-red-400" role="alert">
@@ -85,7 +100,11 @@ export default function AdminLoginPage() {
 
         <button
           type="submit"
-          disabled={state.kind === "submitting" || (captchaRequired && !captchaToken)}
+          disabled={
+            state.kind === "submitting" ||
+            (captchaRequired && siteKey === null) ||
+            (captchaRequired && !captchaToken)
+          }
           className="rounded bg-neutral-100 px-4 py-2 text-neutral-900 disabled:opacity-50"
         >
           {state.kind === "submitting" ? "Entrando..." : "Entrar"}
