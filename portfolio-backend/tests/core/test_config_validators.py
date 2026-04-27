@@ -142,6 +142,8 @@ def test_production_with_cookie_secure_true_passes():
         TRUSTED_PROXY_CIDRS=["172.28.0.0/16"],
         ALLOWED_ORIGINS=["https://eduardoalves.online"],
         ALLOWED_HOSTS=["api.eduardoalves.online"],
+        HCAPTCHA_SITE_KEY="test-site-key",
+        HCAPTCHA_SECRET_KEY="test-secret-key",
     )
     assert s.COOKIE_SECURE is True
 
@@ -197,6 +199,8 @@ def test_app_env_accepts_known_values(value):
         "TRUSTED_PROXY_CIDRS": ["172.28.0.0/16"],
         "ALLOWED_ORIGINS": ["https://eduardoalves.online"],
         "ALLOWED_HOSTS": ["api.eduardoalves.online"],
+        "HCAPTCHA_SITE_KEY": "test-site-key",
+        "HCAPTCHA_SECRET_KEY": "test-secret-key",
     } if value == "production" else {}
     s = Settings(**_COMMON_KWARGS, APP_ENV=value, **extra)
     assert value == s.APP_ENV
@@ -207,3 +211,27 @@ def test_app_env_rejects_unknown_value(value):
     """Typos like 'prod' must fail loudly instead of silently disabling prod gates."""
     with pytest.raises(ValidationError, match="APP_ENV"):
         Settings(**_COMMON_KWARGS, APP_ENV=value)
+
+
+def test_production_requires_hcaptcha_keys(monkeypatch):
+    from app.core.config import Settings
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("COOKIE_SECURE", "true")
+    monkeypatch.setenv("HCAPTCHA_SITE_KEY", "")
+    monkeypatch.setenv("HCAPTCHA_SECRET_KEY", "")
+    monkeypatch.setenv("TRUST_PROXY_HEADERS", "true")
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS", '["127.0.0.1/32"]')
+    monkeypatch.setenv("ALLOWED_HOSTS", '["api.test.local"]')
+    monkeypatch.setenv("ALLOWED_ORIGINS", '["https://test.local"]')
+    with pytest.raises(ValueError, match="HCAPTCHA_SITE_KEY.*HCAPTCHA_SECRET_KEY"):
+        Settings()
+
+
+def test_development_allows_empty_hcaptcha_keys(monkeypatch):
+    from app.core.config import Settings
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("HCAPTCHA_SITE_KEY", "")
+    monkeypatch.setenv("HCAPTCHA_SECRET_KEY", "")
+    settings = Settings()
+    assert settings.HCAPTCHA_SITE_KEY == ""
+    assert settings.HCAPTCHA_SECRET_KEY == ""

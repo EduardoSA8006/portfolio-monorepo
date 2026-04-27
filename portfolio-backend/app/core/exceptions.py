@@ -14,9 +14,15 @@ class AppException(Exception):
     detail: str = "Internal server error"
     code: str = "INTERNAL_ERROR"
 
-    def __init__(self, detail: str | None = None, code: str | None = None) -> None:
+    def __init__(
+        self,
+        detail: str | None = None,
+        code: str | None = None,
+        extra: dict | None = None,
+    ) -> None:
         self.detail = detail or self.__class__.detail
         self.code = code or self.__class__.code
+        self.extra: dict = dict(extra) if extra else {}
         super().__init__(self.detail)
 
 
@@ -25,9 +31,17 @@ def _error_body(code: str, detail: str) -> dict:
 
 
 async def _app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+    body = _error_body(exc.code, exc.detail)
+    # Merge `extra` AFTER the contract fields so a malicious `extra`
+    # cannot override `error` or `detail`.
+    if exc.extra:
+        for key, value in exc.extra.items():
+            if key in ("error", "detail"):
+                continue
+            body[key] = value
     return JSONResponse(
         status_code=exc.status_code,
-        content=_error_body(exc.code, exc.detail),
+        content=body,
     )
 
 

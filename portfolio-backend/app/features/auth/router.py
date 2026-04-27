@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.redis import get_redis
 from app.features.auth import service
 from app.features.auth.cookies import clear_session_cookie, set_session_cookie
 from app.features.auth.dependencies import require_auth
 from app.features.auth.schemas import (
+    AuthConfigResponse,
     LoginRequest,
     LoginResponse,
     MFAVerifyRequest,
@@ -49,6 +51,7 @@ async def login(
         db,
         redis,
         user_agent=_get_user_agent(request),
+        captcha_token=body.captcha_token,
     )
     if result.mfa_required:
         return LoginResponse(
@@ -168,3 +171,12 @@ async def totp_disable(
         user_agent=_get_user_agent(request),
     )
     clear_session_cookie(response)
+
+
+@router.get("/config", response_model=AuthConfigResponse, status_code=status.HTTP_200_OK)
+async def auth_config() -> AuthConfigResponse:
+    """
+    Public config for the admin login page. No auth required — site_key is public.
+    Returns empty string when hCaptcha is not configured (dev mode).
+    """
+    return AuthConfigResponse(hcaptcha_site_key=settings.HCAPTCHA_SITE_KEY)

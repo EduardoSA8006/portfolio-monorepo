@@ -6,6 +6,18 @@ class InvalidCredentialsError(AppException):
     detail = "Invalid email or password"
     code = "AUTH_INVALID_CREDENTIALS"
 
+    def __init__(
+        self,
+        detail: str | None = None,
+        code: str | None = None,
+        captcha_required: bool = False,
+    ) -> None:
+        super().__init__(
+            detail=detail,
+            code=code,
+            extra={"captcha_required": captcha_required},
+        )
+
 
 class AccountDisabledError(AppException):
     status_code = 403
@@ -65,3 +77,15 @@ class TOTPEnrollmentMissingError(AppException):
     status_code = 409
     detail = "No pending TOTP enrollment for this account"
     code = "AUTH_TOTP_ENROLLMENT_MISSING"
+
+
+class CaptchaRequiredError(AppException):
+    status_code = 401
+    detail = "Captcha verification required"
+    code = "AUTH_CAPTCHA_REQUIRED"
+
+
+class CaptchaInvalidError(AppException):
+    status_code = 401
+    detail = "Captcha verification failed"
+    code = "AUTH_CAPTCHA_INVALID"

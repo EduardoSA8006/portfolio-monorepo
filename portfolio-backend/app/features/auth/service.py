@@ -12,8 +12,10 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
-from app.features.auth import mfa_store, rate_limit, repository, token_store
+from app.features.auth import captcha, mfa_store, rate_limit, repository, token_store
 from app.features.auth.exceptions import (
+    CaptchaInvalidError,
+    CaptchaRequiredError,
     InvalidCredentialsError,
     MFAChallengeInvalidError,
     TOTPAlreadyEnabledError,
@@ -106,52 +108,134 @@ async def login(
     db: AsyncSession,
     redis: Redis,
     user_agent: str | None = None,
+    captcha_token: str | None = None,
 ) -> LoginResult:
     """
-    Step 1 of login: validate email + password.
+    Step 1 of login: validate email + password with captcha gate on repeat attempts.
 
-    If the account has TOTP enabled, return an MFA challenge instead of a session.
-    The caller must exchange the challenge for a session via verify_mfa().
-
-    External response is always InvalidCredentialsError regardless of the actual
-    failure reason (user-enumeration defence).
+    Flow:
+    1. check_login_rate — raises TooManyAttemptsError if global lockout active
+    2. If captcha_required and not degraded -> captcha.verify must return ok
+    3. Look up user, compare password (constant-time via _DUMMY_HASH)
+    4. On success: reset rate_limit; (if TOTP) return MFA challenge else session
+    5. On password failure: register_login_failure (NOT on captcha failures)
     """
     email_hash = hash_email(email)
 
-    await rate_limit.check_login_rate(redis, client_ip, email_hash)
+    rate_state = await rate_limit.check_login_rate(redis, client_ip, email_hash)
+
+    if rate_state.captcha_required and not rate_state.degraded:
+        verify_result = await captcha.verify(captcha_token, client_ip, redis)
+        if not verify_result.ok:
+            if captcha_token is None or captcha_token == "":
+                await _record_event(
+                    event_type="login_failed",
+                    reason="captcha_required",
+                    ip=client_ip,
+                    user_agent=user_agent,
+                )
+                raise CaptchaRequiredError()
+            if verify_result.provider_available:
+                await _record_event(
+                    event_type="login_failed",
+                    reason="captcha_invalid",
+                    ip=client_ip,
+                    user_agent=user_agent,
+                )
+                raise CaptchaInvalidError()
+            # Token supplied but provider became unavailable during verify —
+            # degraded flag is now set; continue as if captcha passed.
 
     user = await repository.get_by_email_hash(email_hash, db)
 
     if user is None:
         verify_password(password, _DUMMY_HASH)
-        logger.info("login.failed", extra={"reason": "user_not_found", "email_hash": email_hash, "ip": client_ip})
-        await _record_event(event_type="login_failed", reason="user_not_found", ip=client_ip, user_agent=user_agent)
-        raise InvalidCredentialsError()
+        failure = await rate_limit.register_login_failure(redis, client_ip, email_hash)
+        logger.info(
+            "login.failed",
+            extra={"reason": "user_not_found", "email_hash": email_hash, "ip": client_ip},
+        )
+        await _record_event(
+            event_type="login_failed",
+            reason="user_not_found",
+            ip=client_ip,
+            user_agent=user_agent,
+        )
+        if failure.lockout_triggered:
+            await _record_event(
+                event_type="login_lockout_triggered",
+                ip=client_ip,
+                user_agent=user_agent,
+            )
+        raise InvalidCredentialsError(captcha_required=True)
 
     if not user.is_active:
         verify_password(password, _DUMMY_HASH)
-        logger.info("login.failed", extra={"reason": "account_disabled", "user_id": str(user.id), "ip": client_ip})
-        await _record_event(event_type="login_failed", user_id=str(user.id), reason="account_disabled", ip=client_ip, user_agent=user_agent)
-        raise InvalidCredentialsError()
+        failure = await rate_limit.register_login_failure(redis, client_ip, email_hash)
+        logger.info(
+            "login.failed",
+            extra={"reason": "account_disabled", "user_id": str(user.id), "ip": client_ip},
+        )
+        await _record_event(
+            event_type="login_failed",
+            user_id=str(user.id),
+            reason="account_disabled",
+            ip=client_ip,
+            user_agent=user_agent,
+        )
+        if failure.lockout_triggered:
+            await _record_event(
+                event_type="login_lockout_triggered",
+                user_id=str(user.id),
+                ip=client_ip,
+                user_agent=user_agent,
+            )
+        raise InvalidCredentialsError(captcha_required=True)
 
     if not verify_password(password, user.password_hash):
-        logger.info("login.failed", extra={"reason": "bad_password", "user_id": str(user.id), "ip": client_ip})
-        await _record_event(event_type="login_failed", user_id=str(user.id), reason="bad_password", ip=client_ip, user_agent=user_agent)
-        raise InvalidCredentialsError()
+        failure = await rate_limit.register_login_failure(redis, client_ip, email_hash)
+        logger.info(
+            "login.failed",
+            extra={"reason": "bad_password", "user_id": str(user.id), "ip": client_ip},
+        )
+        await _record_event(
+            event_type="login_failed",
+            user_id=str(user.id),
+            reason="bad_password",
+            ip=client_ip,
+            user_agent=user_agent,
+        )
+        if failure.lockout_triggered:
+            await _record_event(
+                event_type="login_lockout_triggered",
+                user_id=str(user.id),
+                ip=client_ip,
+                user_agent=user_agent,
+            )
+        raise InvalidCredentialsError(captcha_required=True)
 
     await _maybe_rehash_password_hash(user, password, db)
-
     await rate_limit.reset_login_rate(redis, client_ip, email_hash)
 
     if user.totp_enabled:
         challenge = await mfa_store.create_challenge(redis, str(user.id))
         logger.info("login.mfa_required", extra={"user_id": str(user.id), "ip": client_ip})
-        await _record_event(event_type="login_mfa_challenge", user_id=str(user.id), ip=client_ip, user_agent=user_agent)
+        await _record_event(
+            event_type="login_mfa_challenge",
+            user_id=str(user.id),
+            ip=client_ip,
+            user_agent=user_agent,
+        )
         return LoginResult(mfa_challenge_token=challenge)
 
     session_token, csrf_token = await token_store.create_session(redis, str(user.id))
     logger.info("login.success", extra={"user_id": str(user.id), "ip": client_ip})
-    await _record_event(event_type="login_success", user_id=str(user.id), ip=client_ip, user_agent=user_agent)
+    await _record_event(
+        event_type="login_success",
+        user_id=str(user.id),
+        ip=client_ip,
+        user_agent=user_agent,
+    )
     return LoginResult(session_token=session_token, csrf_token=csrf_token)
 
 

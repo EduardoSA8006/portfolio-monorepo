@@ -10,6 +10,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,md,mdx,json}\""
   },
   "dependencies": {
+    "@hcaptcha/react-hcaptcha": "^2.0.2",
     "@hookform/resolvers": "^5.2.2",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.0",
