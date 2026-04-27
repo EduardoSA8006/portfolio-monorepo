@@ -67,10 +67,11 @@ Preencher no `.env` (gerar **senhas distintas** para cada serviço):
 - `COOKIE_SECURE=true`
 - `COOKIE_SAMESITE=lax`
 - `TRUST_PROXY_HEADERS=true`
-- `TRUSTED_PROXY_CIDRS=["172.28.0.0/16"]`
+- `TRUSTED_PROXY_CIDRS=["172.28.0.10/32"]` — Traefik's pinned IP on `edge`. Do **not** widen to the whole subnet; any other container on `edge` could otherwise spoof `X-Forwarded-For`.
 - `READINESS_ALLOWED_CIDRS=["127.0.0.1/32","::1/128","172.28.0.0/16"]`
 - `ALLOWED_ORIGINS=["https://eduardoalves.online"]`
 - `ALLOWED_HOSTS=["api.eduardoalves.online"]`
+- `NEXT_PUBLIC_API_BASE_URL=https://api.eduardoalves.online` — inlined into the Next.js bundle at build time. Compose's base file is fail-closed (`:?`) on this var, so omitting it aborts the build.
 
 **Importante:** `REDIS_PASSWORD` e `CELERY_REDIS_PASSWORD` devem ser **diferentes**. Cada senha protege uma instância Redis distinta em redes Docker separadas (sessions_net vs celery_net), de modo que um comprometimento do worker Celery não alcance chaves `auth:session:*`.
 
@@ -119,22 +120,41 @@ TLS handshake error (esperado — sem cert ainda).
 
 ## 6. Rodar migrações do banco
 
+> **AVISO — sempre passe `-f docker-compose.yml -f docker-compose.prod.yml`.**
+> O repositório contém um `docker-compose.override.yml` (dev) que o Compose
+> aplica **automaticamente** se você rodar `docker compose <cmd>` puro nesse
+> diretório. Em produção isso silenciosamente publica portas em 127.0.0.1,
+> desativa `read_only`, troca para `APP_ENV=development`, `COOKIE_SECURE=false`
+> e remove a rede `edge` (Traefik perde a rota para o backend). Use sempre os
+> dois `-f` em qualquer comando — `up`, `down`, `ps`, `logs`, `run`, `exec`.
+
 ```bash
 cd /srv/portfolio-backend
-docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm api alembic upgrade head
 ```
 
-Expected: tabelas criadas. Se falhar, verificar `DATABASE_URL_SYNC` no `.env`.
+Expected: tabelas criadas e revisão atual = `d5a1e3f0` (cabeça atual).
+Migrações que sobem nesse passo:
+- `69e9b063` cria `admin_users`.
+- `3a7f21bc` cria `auth_events`.
+- `b2c14e80` adiciona `totp_secret_enc` + `totp_enabled`.
+- `c4d918ef` relaxa `totp_secret_enc → TEXT` + cria índice `(event_type, created_at)`.
+- `d5a1e3f0` adiciona `email` + `email_2fa_enabled` em `admin_users`.
+
+Se falhar, verificar `DATABASE_URL_SYNC` no `.env`.
 
 ## 7. Subir o backend
 
 ```bash
 cd /srv/portfolio-backend
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
-Todos os serviços devem aparecer `running (healthy)` em até 60s.
+Todos os serviços devem aparecer `running (healthy)` em até 60s — incluindo
+o `api` (o healthcheck dele bate em `http://127.0.0.1:8000/health` interno
+ao container, então `frontend` espera o backend estar saudável antes de
+subir, evitando 502 transitório no boot).
 
 ## 8. Validar o certificado
 
@@ -160,7 +180,7 @@ erros de rate limit ou DNS.
    curl -s https://api.eduardoalves.online/health/ready
    # Expected: {"error":"FORBIDDEN","detail":"Forbidden"}
 
-   docker compose -f docker-compose.prod.yml exec api python - <<'PY'
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api python - <<'PY'
    import json
    from urllib.request import urlopen
 
@@ -195,7 +215,7 @@ erros de rate limit ou DNS.
 
 ```bash
 cd /srv/portfolio-backend
-docker compose -f docker-compose.prod.yml run --rm api python scripts/create_admin.py
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm api python scripts/create_admin.py
 ```
 
 Seguir os prompts do script.
@@ -206,22 +226,22 @@ Se algo quebrar em produção:
 
 ```bash
 cd /srv/portfolio-backend
-docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 # Traefik continua rodando, mas sem rota -> responde 404 para api.eduardoalves.online
 # Frontend em eduardoalves.online continua acessível (outro VPS).
 
 git fetch --tags
 git checkout <tag-anterior-estavel>
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 ## Operação contínua
 
 - **Renovação TLS:** automática via Traefik; nada a fazer.
-- **Atualizar o backend:** `git pull && docker compose -f docker-compose.prod.yml up -d --build`.
+- **Atualizar o backend:** `git pull && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
 - **Atualizar o Traefik:** `cd /srv/traefik && docker compose pull && docker compose up -d`.
 - **Backup do DB:** `docker exec portfolio_postgres pg_dump -U portfolio portfolio > backup-$(date +%F).sql` (rodar em cron; fora do escopo deste runbook).
-- **Logs:** `docker compose -f docker-compose.prod.yml logs -f api`.
+- **Logs:** `docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f api`.
 - **Isolamento Redis:** há duas instâncias — `portfolio_redis` (sessões) e `portfolio_redis_celery` (broker/resultado). Ficam em redes Docker separadas (`sessions_net` e `celery_net`); cada uma tem uma senha. Nunca apontar `CELERY_BROKER_URL` para `redis:6379` — isso recoloca o risco de task poisoning atingir sessões.
 
 ## Troubleshooting

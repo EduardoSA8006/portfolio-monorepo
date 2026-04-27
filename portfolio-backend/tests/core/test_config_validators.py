@@ -19,6 +19,15 @@ _COMMON_KWARGS = {
     "CELERY_RESULT_BACKEND": "redis://h:6379/2",
 }
 
+# Real-looking passwords that satisfy the production credential validator.
+# Distinct values per service so a mistakenly-shared credential would fail
+# loudly instead of silently passing tests.
+_PROD_CREDENTIAL_KWARGS = {
+    "POSTGRES_PASSWORD": "pg-real-prod-pw-aa",
+    "REDIS_PASSWORD": "redis-real-prod-pw-bb",
+    "CELERY_REDIS_PASSWORD": "celery-real-prod-pw-cc",
+}
+
 
 def test_trusted_proxy_cidrs_required_when_trust_proxy_headers_true():
     """TRUST_PROXY_HEADERS=True with empty TRUSTED_PROXY_CIDRS must fail."""
@@ -136,6 +145,7 @@ def test_production_with_cookie_secure_true_passes():
     """Happy path: production + COOKIE_SECURE=True works."""
     s = Settings(
         **_COMMON_KWARGS,
+        **_PROD_CREDENTIAL_KWARGS,
         APP_ENV="production",
         COOKIE_SECURE=True,
         TRUST_PROXY_HEADERS=True,
@@ -169,8 +179,9 @@ def test_allowed_hosts_rejects_wildcard():
         Settings(**_COMMON_KWARGS, ALLOWED_HOSTS=["*"])
 
 
-def test_session_max_age_must_cover_absolute():
-    """SESSION_MAX_AGE_SECONDS < SESSION_ABSOLUTE_SECONDS leaks cookies past expiry."""
+def test_session_max_age_below_absolute_rejected():
+    """Cookie shorter than the server session expires the cookie mid-session,
+    forcing a 401 before the user's absolute lifetime is up."""
     with pytest.raises(ValidationError, match="SESSION_MAX_AGE_SECONDS"):
         Settings(
             **_COMMON_KWARGS,
@@ -179,12 +190,38 @@ def test_session_max_age_must_cover_absolute():
         )
 
 
+def test_session_max_age_above_absolute_rejected():
+    """Cookie longer than the server session leaves an orphaned cookie that
+    the browser keeps sending after the server has dropped the session,
+    producing the 'logged out by myself' UX bug."""
+    with pytest.raises(ValidationError, match="SESSION_MAX_AGE_SECONDS"):
+        Settings(
+            **_COMMON_KWARGS,
+            SESSION_ABSOLUTE_SECONDS=28800,
+            SESSION_MAX_AGE_SECONDS=86400,
+        )
+
+
+def test_session_max_age_equal_to_absolute_passes():
+    """Equality is the only valid configuration — cookie and server session
+    expire at the same instant."""
+    s = Settings(
+        **_COMMON_KWARGS,
+        SESSION_ABSOLUTE_SECONDS=28800,
+        SESSION_MAX_AGE_SECONDS=28800,
+    )
+    assert s.SESSION_MAX_AGE_SECONDS == s.SESSION_ABSOLUTE_SECONDS
+
+
 def test_session_idle_cannot_exceed_absolute():
-    """Idle timeout larger than absolute lifetime is nonsensical — reject."""
+    """Idle timeout larger than absolute lifetime is nonsensical — reject.
+    MAX_AGE is set equal to ABSOLUTE so the equality check passes and
+    the IDLE > ABSOLUTE branch is what surfaces."""
     with pytest.raises(ValidationError, match="SESSION_IDLE_SECONDS"):
         Settings(
             **_COMMON_KWARGS,
             SESSION_ABSOLUTE_SECONDS=1800,
+            SESSION_MAX_AGE_SECONDS=1800,
             SESSION_IDLE_SECONDS=3600,
         )
 
@@ -201,6 +238,7 @@ def test_app_env_accepts_known_values(value):
         "ALLOWED_HOSTS": ["api.eduardoalves.online"],
         "HCAPTCHA_SITE_KEY": "test-site-key",
         "HCAPTCHA_SECRET_KEY": "test-secret-key",
+        **_PROD_CREDENTIAL_KWARGS,
     } if value == "production" else {}
     s = Settings(**_COMMON_KWARGS, APP_ENV=value, **extra)
     assert value == s.APP_ENV
@@ -235,3 +273,118 @@ def test_development_allows_empty_hcaptcha_keys(monkeypatch):
     settings = Settings()
     assert settings.HCAPTCHA_SITE_KEY == ""
     assert settings.HCAPTCHA_SECRET_KEY == ""
+
+
+# ---------------------------------------------------------------------------
+# Placeholder credential rejection (URLs always; bare passwords in production)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "DATABASE_URL",
+        "DATABASE_URL_SYNC",
+        "REDIS_URL",
+        "CELERY_BROKER_URL",
+        "CELERY_RESULT_BACKEND",
+    ],
+)
+@pytest.mark.parametrize("placeholder", ["REPLACE_ME", "replace_me", "CHANGE_ME", "changeme"])
+def test_connection_url_rejects_placeholder_credentials(field, placeholder):
+    """A connection URL embedding REPLACE_ME / CHANGE_ME must fail at startup,
+    in any environment — there is no legitimate reason for the literal
+    placeholder string to ship to a running instance."""
+    overrides = dict(_COMMON_KWARGS)
+    overrides[field] = f"redis://:{placeholder}@host:6379/0" if "REDIS" in field or "CELERY" in field else f"postgresql://u:{placeholder}@h:5432/d"
+    with pytest.raises(ValidationError, match="placeholder credential"):
+        Settings(**overrides)
+
+
+def test_connection_url_placeholder_rejected_even_outside_production():
+    """The URL placeholder check is unconditional — APP_ENV does not gate it."""
+    overrides = dict(_COMMON_KWARGS)
+    overrides["REDIS_URL"] = "redis://:REPLACE_ME@redis:6379/0"
+    with pytest.raises(ValidationError, match="placeholder credential"):
+        Settings(**overrides, APP_ENV="development")
+
+
+def _prod_kwargs(**overrides):
+    """Helper: build a kwargs dict that satisfies every prod gate by default,
+    so each test can override exactly the field it's exercising."""
+    base = {
+        **_COMMON_KWARGS,
+        **_PROD_CREDENTIAL_KWARGS,
+        "APP_ENV": "production",
+        "COOKIE_SECURE": True,
+        "TRUST_PROXY_HEADERS": True,
+        "TRUSTED_PROXY_CIDRS": ["172.28.0.0/16"],
+        "ALLOWED_ORIGINS": ["https://eduardoalves.online"],
+        "ALLOWED_HOSTS": ["api.eduardoalves.online"],
+        "HCAPTCHA_SITE_KEY": "test-site-key",
+        "HCAPTCHA_SECRET_KEY": "test-secret-key",
+    }
+    base.update(overrides)
+    return base
+
+
+@pytest.mark.parametrize(
+    "field", ["POSTGRES_PASSWORD", "REDIS_PASSWORD", "CELERY_REDIS_PASSWORD"]
+)
+def test_production_rejects_empty_credential(field):
+    """Each of the three service passwords must be non-empty in production."""
+    with pytest.raises(ValidationError, match=f"{field}.*must be set"):
+        Settings(**_prod_kwargs(**{field: ""}))
+
+
+@pytest.mark.parametrize(
+    "field", ["POSTGRES_PASSWORD", "REDIS_PASSWORD", "CELERY_REDIS_PASSWORD"]
+)
+@pytest.mark.parametrize("placeholder", ["REPLACE_ME", "replace_me", "CHANGE_ME", "changeme"])
+def test_production_rejects_placeholder_credential(field, placeholder):
+    """REPLACE_ME / CHANGE_ME in any of the three service passwords must fail
+    in production. Catches the case where .env was copied from .env.example
+    but a password was forgotten."""
+    with pytest.raises(ValidationError, match=f"{field}.*placeholder"):
+        Settings(**_prod_kwargs(**{field: placeholder}))
+
+
+def test_production_aggregates_multiple_credential_failures():
+    """When several fields are misconfigured, the error message lists them all
+    so the operator fixes the .env in one round-trip rather than re-running
+    boot for each missing field."""
+    with pytest.raises(ValidationError) as exc:
+        Settings(**_prod_kwargs(POSTGRES_PASSWORD="", REDIS_PASSWORD="REPLACE_ME"))
+    msg = str(exc.value)
+    assert "POSTGRES_PASSWORD" in msg
+    assert "REDIS_PASSWORD" in msg
+
+
+@pytest.mark.parametrize("field", ["SESSION_TOKEN_LENGTH", "CSRF_TOKEN_LENGTH"])
+@pytest.mark.parametrize("bad_value", [47, 31, 1])
+def test_token_length_rejects_odd_values(field, bad_value):
+    """secrets.token_hex(length // 2) silently rounds odd lengths down,
+    halving entropy on the rounded byte. Reject at startup."""
+    with pytest.raises(ValidationError, match="must be even"):
+        Settings(**_COMMON_KWARGS, **{field: bad_value})
+
+
+@pytest.mark.parametrize("field", ["SESSION_TOKEN_LENGTH", "CSRF_TOKEN_LENGTH"])
+def test_token_length_rejects_too_short(field):
+    """Even but short — under 16 hex chars (8 bytes) is too little entropy
+    for a session/CSRF token regardless of evenness."""
+    with pytest.raises(ValidationError, match=">= 16"):
+        Settings(**_COMMON_KWARGS, **{field: 8})
+
+
+def test_development_allows_empty_credentials():
+    """The credential model validator only fires in production. Dev/test
+    suites must not need to wire real-looking passwords through fixtures."""
+    s = Settings(
+        **_COMMON_KWARGS,
+        APP_ENV="development",
+        POSTGRES_PASSWORD="",
+        REDIS_PASSWORD="",
+        CELERY_REDIS_PASSWORD="",
+    )
+    assert s.APP_ENV == "development"

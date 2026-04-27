@@ -1,0 +1,63 @@
+# Development overrides — applied AUTOMATICALLY by Docker Compose whenever you
+# run `docker compose <cmd>` from this directory without explicit `-f` flags.
+#
+# This file is DEV ONLY. It publishes host ports on 127.0.0.1, sets
+# APP_ENV=development / COOKIE_SECURE=false, disables read_only, and drops the
+# external `edge` network. Loading it in production silently breaks cookie
+# hardening, container isolation, and Traefik ingress.
+#
+# Production MUST use the explicit pair:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml <cmd>
+# See docs/runbook-deploy.md.
+#
+# Host port exposure policy: only the API publishes a port on 127.0.0.1 so the
+# native frontend (Next.js on the host) can reach it. Postgres, Redis (sessions)
+# and Redis (Celery) stay on their internal Docker networks with no host port —
+# inspect them with `docker compose exec <svc> ...` instead of binding to localhost.
+services:
+  api:
+    # In dev we publish 8000 on the host so the local frontend can hit it
+    # directly — no Traefik, no TLS. Production never goes through this file.
+    ports:
+      - "127.0.0.1:8000:8000"
+    # read_only + bind mount for hot-reload: dev needs to write bytecode caches,
+    # so we disable read_only here. Production keeps read_only=true from the base file.
+    read_only: false
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./portfolio-backend:/app
+      # Anonymous volume shadows the bind mount so the image's .venv survives.
+      # To pick up new packages: docker compose down -v && docker compose up --build
+      - /app/.venv
+    environment:
+      APP_ENV: development
+      COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: "lax"
+      TRUST_PROXY_HEADERS: "false"
+      TRUSTED_PROXY_CIDRS: '["127.0.0.1/32"]'
+      READINESS_ALLOWED_CIDRS: '["127.0.0.1/32","::1/128"]'
+    # Override so dev does NOT try to join the external `edge` network.
+    # Keep data_net (postgres), sessions_net (redis) and web_net (frontend).
+    networks: !override
+      - data_net
+      - sessions_net
+      - web_net
+
+  celery:
+    read_only: false
+    command: ["celery", "-A", "app.worker", "worker", "--loglevel=debug", "--concurrency=2"]
+    volumes:
+      - ./portfolio-backend:/app
+      - /app/.venv
+    environment:
+      APP_ENV: development
+
+  frontend:
+    # Dev publishes the Next.js prod build on 127.0.0.1 only. The bundle
+    # itself is still the standalone build — no hot-reload, no source mount.
+    # To pick up code changes: docker compose build frontend && docker compose up -d frontend
+    ports:
+      - "127.0.0.1:3000:3000"
+    # Drop the external `edge` network in dev (Traefik isn't running locally).
+    networks: !override
+      - web_net

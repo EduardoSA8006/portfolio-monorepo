@@ -1,0 +1,22 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] TOTP enrollment confirm failed
+
+A TOTP enrollment attempt failed at the confirmation step — the
+authenticator code did not match the server-side secret. Usually a
+clock-skew issue or a wrong QR scan.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+Repeated failures from one IP are suspicious — a successful enroll
+would bind an authenticator under attacker control.
+
+What to do:
+  1. If you weren't enrolling, re-run totp/enroll yourself to overwrite
+     the pending secret.
+  2. If the failure was you on a new device, re-scan the fresh QR.
+{%- endblock %}

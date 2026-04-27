@@ -1,8 +1,17 @@
 # Traefik edge stack — copy this directory to /srv/traefik/ on the VPS.
 # See deploy/traefik/README.md and docs/runbook-deploy.md for setup steps.
+#
+# IMPORTANT: the `edge` network is dedicated to this Traefik stack and the
+# containers Traefik proxies (the backend's api and frontend services).
+# Joining any other workload to `edge` defeats the IP-based proxy-trust
+# defense in the API: TRUSTED_PROXY_CIDRS pins to Traefik's static IP
+# (172.28.0.10), so any other container on `edge` could otherwise inject
+# X-Forwarded-For and bypass per-IP rate limiting.
 services:
   traefik:
-    image: traefik:v3.1
+    # Pinned by digest. To update: `docker pull traefik:v3.1 && docker
+    # image inspect traefik:v3.1 --format '{{index .RepoDigests 0}}'`.
+    image: traefik:v3.1@sha256:74d72c7a1345984f186bddbabcc462b2128d0d8054177dc84afaeac4db1f0f56
     container_name: traefik
     restart: unless-stopped
     ports:
@@ -12,18 +21,31 @@ services:
       # Read-only socket — Traefik only reads container labels, never creates.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./dynamic:/etc/traefik/dynamic:ro
       - ./acme.json:/acme.json
     env_file:
       - .env
     security_opt:
       - no-new-privileges:true
+    # Drop the default capability set; keep NET_BIND_SERVICE so Traefik
+    # can bind 80/443 if the image switches to a non-root user (current
+    # v3.x runs as root, where the cap is implicit).
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     deploy:
       resources:
         limits:
           cpus: "0.5"
           memory: "256M"
     networks:
-      - edge
+      edge:
+        # Static IP on the edge network so the API can pin
+        # TRUSTED_PROXY_HEADERS to a /32 instead of trusting the entire
+        # 172.28.0.0/16 subnet. Update create-edge-network.sh's subnet
+        # if you change this.
+        ipv4_address: 172.28.0.10
 
 networks:
   edge:

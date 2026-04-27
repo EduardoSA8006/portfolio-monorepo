@@ -74,9 +74,15 @@ def totp_user():
 def login_user():
     return SimpleNamespace(
         id=uuid.uuid4(),
+        name="Login Tester",
         is_active=True,
         password_hash="stored-hash",
         totp_enabled=False,
+        email_2fa_enabled=False,
+        # `email` matches the form value used in the login() calls below
+        # so _maybe_backfill_email is a no-op and the assertions stay
+        # focused on the rehash + audit ordering.
+        email="admin@example.com",
     )
 
 
@@ -107,7 +113,12 @@ async def test_login_rehashes_password_hash_after_successful_verify(monkeypatch,
     monkeypatch.setattr(service.rate_limit, "check_login_rate", fake_check_login_rate)
     monkeypatch.setattr(service.rate_limit, "reset_login_rate", fake_reset_login_rate)
     monkeypatch.setattr(service.token_store, "create_session", fake_create_session)
-    monkeypatch.setattr(service, "_record_event", fake_record_event)
+
+    async def _fake_track_login(*, redis, user_id, device_cookie_value):
+        return False, None
+
+    monkeypatch.setattr(service.devices, "track_login", _fake_track_login)
+    monkeypatch.setattr(service.audit, "record_event", fake_record_event)
     monkeypatch.setattr(service, "verify_password", lambda plain, hashed: True)
     monkeypatch.setattr(service, "password_needs_rehash", lambda hashed: True)
     monkeypatch.setattr(service, "hash_password", lambda plain: "upgraded-hash")
@@ -148,7 +159,12 @@ async def test_login_continues_when_password_rehash_commit_fails(monkeypatch, lo
     monkeypatch.setattr(service.rate_limit, "check_login_rate", fake_check_login_rate)
     monkeypatch.setattr(service.rate_limit, "reset_login_rate", fake_reset_login_rate)
     monkeypatch.setattr(service.token_store, "create_session", fake_create_session)
-    monkeypatch.setattr(service, "_record_event", fake_record_event)
+
+    async def _fake_track_login(*, redis, user_id, device_cookie_value):
+        return False, None
+
+    monkeypatch.setattr(service.devices, "track_login", _fake_track_login)
+    monkeypatch.setattr(service.audit, "record_event", fake_record_event)
     monkeypatch.setattr(service, "verify_password", lambda plain, hashed: True)
     monkeypatch.setattr(service, "password_needs_rehash", lambda hashed: True)
     monkeypatch.setattr(service, "hash_password", lambda plain: "upgraded-hash")
@@ -189,9 +205,14 @@ async def test_login_audit_does_not_commit_business_session(monkeypatch, login_u
     monkeypatch.setattr(service.rate_limit, "check_login_rate", fake_check_login_rate)
     monkeypatch.setattr(service.rate_limit, "reset_login_rate", fake_reset_login_rate)
     monkeypatch.setattr(service.token_store, "create_session", fake_create_session)
+
+    async def _fake_track_login(*, redis, user_id, device_cookie_value):
+        return False, None
+
+    monkeypatch.setattr(service.devices, "track_login", _fake_track_login)
     monkeypatch.setattr(service, "_maybe_rehash_password_hash", fake_maybe_rehash_password_hash)
     monkeypatch.setattr(service, "verify_password", lambda plain, hashed: True)
-    monkeypatch.setattr(service, "AsyncSessionLocal", _FakeAuditSessionFactory(audit_db))
+    monkeypatch.setattr(service.audit, "AsyncSessionLocal", _FakeAuditSessionFactory(audit_db))
 
     result = await service.login(
         "admin@example.com",
@@ -231,7 +252,7 @@ async def test_disable_totp_revokes_sessions_before_db_downgrade(monkeypatch, to
     monkeypatch.setattr(service, "decrypt_totp_secret", lambda value: "secret")
     monkeypatch.setattr(service, "verify_totp_code", lambda secret, code: True)
     monkeypatch.setattr(service.token_store, "clear_user_sessions", fake_clear_user_sessions)
-    monkeypatch.setattr(service, "_record_event", fake_record_event)
+    monkeypatch.setattr(service.audit, "record_event", fake_record_event)
 
     await service.disable_totp(str(totp_user.id), "123456", db, redis=object())
 
@@ -320,7 +341,13 @@ async def test_login_skips_captcha_when_degraded(monkeypatch):
         return None
 
     async def fake_register(redis, ip, eh):
-        return FailureRegistration(counter=1, sadd_triggered=False, lockout_triggered=False)
+        return FailureRegistration(
+            counter=1,
+            sadd_triggered=False,
+            lockout_triggered=False,
+            ip_counter=1,
+            ip_ban_triggered=False,
+        )
 
     monkeypatch.setattr(service.rate_limit, "check_login_rate", fake_check)
     monkeypatch.setattr(service.rate_limit, "register_login_failure", fake_register)
@@ -349,7 +376,13 @@ async def test_login_invalid_credentials_carries_captcha_required_flag(monkeypat
         return RateCheckResult(captcha_required=False, degraded=False)
 
     async def fake_register(redis, ip, eh):
-        return FailureRegistration(counter=1, sadd_triggered=False, lockout_triggered=False)
+        return FailureRegistration(
+            counter=1,
+            sadd_triggered=False,
+            lockout_triggered=False,
+            ip_counter=1,
+            ip_ban_triggered=False,
+        )
 
     async def fake_get_by_email_hash(eh, db):
         return None
@@ -360,7 +393,7 @@ async def test_login_invalid_credentials_carries_captcha_required_flag(monkeypat
     monkeypatch.setattr(service.rate_limit, "check_login_rate", fake_check)
     monkeypatch.setattr(service.rate_limit, "register_login_failure", fake_register)
     monkeypatch.setattr(service.repository, "get_by_email_hash", fake_get_by_email_hash)
-    monkeypatch.setattr(service, "_record_event", fake_record_event)
+    monkeypatch.setattr(service.audit, "record_event", fake_record_event)
 
     with pytest.raises(InvalidCredentialsError) as exc_info:
         await service.login(

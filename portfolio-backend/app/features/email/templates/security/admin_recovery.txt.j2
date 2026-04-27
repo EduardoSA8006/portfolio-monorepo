@@ -1,0 +1,25 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] Admin recovery via runbook
+
+Someone executed `create_admin.py --reset` on the admin account.
+Both the password and TOTP secret were rotated. This path requires
+shell access to the production host.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+If you did NOT execute this recovery, the host is compromised at the
+shell level. The application's auth surface is no longer the bound on
+what an attacker can do.
+
+What to do:
+  1. Pull SSH access logs for the production VPS around this timestamp.
+  2. Rotate every secret in .env (SECRET_KEY, EMAIL_PEPPER, DB / Redis).
+  3. Audit the host for unfamiliar SSH keys, sudoers entries, cron jobs.
+  4. If the host can't be trusted, redeploy onto a fresh VM and rotate
+     everything from .env.example.
+{%- endblock %}

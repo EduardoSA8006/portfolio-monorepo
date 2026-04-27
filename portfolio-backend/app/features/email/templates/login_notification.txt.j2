@@ -1,0 +1,16 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+Hi {{ name }},
+
+A new sign-in to your admin account just succeeded.
+
+  When : {{ when_str }}
+  IP   : {{ ip }}
+  Agent: {{ user_agent or '(no user-agent header)' }}
+
+If this was you, no action is needed.
+
+If it wasn't you:
+  1. Reset your password and TOTP via the admin recovery runbook.
+  2. Review recent auth_events rows for unfamiliar IPs.
+{%- endblock %}

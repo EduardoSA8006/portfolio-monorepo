@@ -1,0 +1,19 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+Hi {{ name }},
+
+Your admin credentials (password and TOTP) were just reset via the
+recovery runbook at:
+
+  When: {{ when_str }}
+  From: {{ ip }}
+
+If you executed this recovery yourself, no action is required.
+
+If you did NOT, the host that runs the application has been compromised.
+Treat as an incident:
+  1. Rotate every secret in .env (SECRET_KEY, EMAIL_PEPPER, all DB
+     and Redis passwords).
+  2. Audit every auth_events row since the reset for unfamiliar IPs.
+  3. Revoke outstanding sessions in Redis.
+{%- endblock %}

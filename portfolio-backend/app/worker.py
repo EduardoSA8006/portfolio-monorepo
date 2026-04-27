@@ -12,7 +12,13 @@ celery_app = Celery(
     "portfolio",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.tasks"],
+    # `include` follows the feature-first layout: tasks live next to
+    # the code that produces them, not in a flat `app.tasks` package.
+    # Add new feature task modules here when they get wired in.
+    include=[
+        "app.tasks",
+        "app.features.email.tasks",
+    ],
 )
 
 celery_app.conf.update(

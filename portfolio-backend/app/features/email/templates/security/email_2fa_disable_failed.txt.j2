@@ -1,0 +1,19 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] Email 2FA disable rejected
+
+A request to disable email 2FA was rejected — the caller could not
+produce a valid current email code. They had a working session, knew
+the disable endpoint, but did not have email inbox access.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+What to do:
+  1. Identify the originating session (auth_events row carries user_id).
+  2. If the session IP is unfamiliar, force sessions_cleared + rotate password.
+  3. If you typo'd the code yourself, ignore the alert.
+{%- endblock %}

@@ -1,0 +1,38 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "critical" %}
+
+{% block preheader %}Second factor (TOTP) was just disabled on the admin account.{% endblock %}
+
+{% block header_eyebrow %}MFA degraded{% endblock %}
+{% block header_title %}TOTP disabled on the admin account{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  TOTP was successfully disabled on the admin account. From now until
+  it's re-enrolled, sign-in needs only the password — the auth surface
+  has degraded by exactly one factor.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "critical",
+  "If you did not initiate this, the password was already compromised
+   AND the attacker holds a valid TOTP code (the disable endpoint
+   demands one). Treat as full account takeover in progress."
+) }}
+
+{{ m.action_list([
+  "Rotate the password immediately.",
+  "Re-enroll TOTP on a fresh authenticator (the previous secret is gone).",
+  "Revoke every outstanding session in Redis (SCAN auth:session:* | DEL).",
+  "Audit auth_events for the surrounding 'login_success' that preceded this disable.",
+]) }}
+{% endblock %}

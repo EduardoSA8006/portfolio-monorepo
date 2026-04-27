@@ -1,0 +1,36 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "warning" %}
+
+{% block preheader %}Someone tried to disable TOTP on the admin account but the request was rejected.{% endblock %}
+
+{% block header_eyebrow %}MFA tampering{% endblock %}
+{% block header_title %}TOTP disable attempt rejected{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  A request to disable TOTP on the admin account was rejected — the
+  caller could not produce a valid current TOTP code or the session
+  state diverged mid-flight.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "warning",
+  "Whoever tried this had a working session AND knew TOTP was on.
+   That's not a casual probe."
+) }}
+
+{{ m.action_list([
+  "Identify the session that originated the request — auth_events row carries the user_id.",
+  "If the session origin IP is unfamiliar, assume the cookie is leaked: log the user out, revoke sessions, rotate password.",
+  "Repeat attempts in the same window mean someone is iterating on TOTP guesses or session state — escalate.",
+]) }}
+{% endblock %}

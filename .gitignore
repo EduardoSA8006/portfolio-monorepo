@@ -1,0 +1,191 @@
+# =============================================================================
+# Single source of truth for the monorepo. Covers backend (Python/FastAPI/
+# Celery), frontend (Next.js/pnpm), tooling, OS, IDE, and runtime artifacts.
+# Per-project .gitignore files were intentionally consolidated here.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Secrets / environment files
+# -----------------------------------------------------------------------------
+# Never commit real env files. Examples and templates are explicit allow-lists.
+.env
+.env.*
+*.env
+*.env.local
+!.env.example
+!*.env.example
+!.env.*.example
+
+# Per-stack runtime env (Traefik etc.)
+portfolio-backend/deploy/traefik/.env
+portfolio-backend/deploy/traefik/acme.json
+
+# Common credential / key files
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*.jks
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.kdbx
+secrets/
+.secrets/
+
+# -----------------------------------------------------------------------------
+# Python (portfolio-backend)
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+.installed.cfg
+develop-eggs/
+sdist/
+wheels/
+*.whl
+share/python-wheels/
+MANIFEST
+
+# Virtualenvs
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Test / coverage / type-check caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+.cache/
+.hypothesis/
+
+# Build artifacts
+dist/
+build/
+*.manifest
+*.spec
+
+# Alembic — keep migration scripts; ignore stray bytecode
+alembic/versions/__pycache__/
+
+# Jupyter / notebooks (if added later)
+.ipynb_checkpoints/
+
+# -----------------------------------------------------------------------------
+# Node.js / Next.js (portfolio-frontend)
+# -----------------------------------------------------------------------------
+node_modules/
+.pnp
+.pnp.*
+.yarn/cache
+.yarn/install-state.gz
+.yarn/build-state
+.yarn/unplugged
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Build / coverage
+build/
+coverage/
+.nyc_output/
+
+# Vercel / Turbo
+.vercel
+.turbo
+
+# Bundler / framework caches
+.parcel-cache/
+.swc/
+.eslintcache
+.stylelintcache
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# -----------------------------------------------------------------------------
+# Containers / infra runtime
+# -----------------------------------------------------------------------------
+# docker-compose generated overrides (kept tracked: docker-compose*.yml)
+*.local.yml
+docker-compose.override.local.yml
+
+# -----------------------------------------------------------------------------
+# OS
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# -----------------------------------------------------------------------------
+# Editors / IDEs
+# -----------------------------------------------------------------------------
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# -----------------------------------------------------------------------------
+# Tooling artifacts
+# -----------------------------------------------------------------------------
+.codex
+.superpowers/
+.claude/
+.aider*
+.history/
+
+# Generic logs / temp / dumps
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.pid
+*.seed
+*.pid.lock

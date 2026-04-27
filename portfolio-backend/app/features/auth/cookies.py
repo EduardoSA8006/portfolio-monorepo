@@ -10,8 +10,8 @@ a working session because they cannot produce a valid signature without
 SECRET_KEY. Rotating SECRET_KEY invalidates every outstanding cookie, which is
 the desired behavior during an incident.
 """
-import hmac
 import hashlib
+import hmac
 
 from fastapi import Response
 
@@ -53,12 +53,31 @@ def sign_token(raw_token: str) -> str:
     return f"{raw_token}.{_sign(raw_token)}"
 
 
+class CookieSignatureInvalid(Exception):
+    """
+    Cookie has the right shape (`token.sig`) but the HMAC does not verify.
+
+    This is raised — instead of returning None — so the caller can
+    distinguish an attempted forgery from a legitimately-absent or
+    malformed cookie. The dependency layer turns this into a structured
+    log line plus an `auth_events` audit row, so an attacker probing
+    SECRET_KEY guesses leaves a paper trail rather than vanishing into
+    the same bucket as "no cookie".
+    """
+
+
 def unsign_token(cookie_value: str) -> str | None:
     """
     Verify an incoming cookie value and return the raw session token.
 
-    Returns None if the cookie is malformed or the signature doesn't match —
-    the caller should treat that identically to a missing cookie.
+    Returns None when there is nothing to verify — empty cookie or
+    malformed shape (no separator, empty halves). Those cases are
+    indistinguishable from "no cookie" and don't warrant alerting.
+
+    Raises CookieSignatureInvalid when the cookie has the correct shape
+    but the HMAC does not match — that case is suspicious (forgery
+    attempt or stale cookie after SECRET_KEY rotation) and the caller is
+    expected to log + audit before falling back to the no-session path.
     """
     if not cookie_value or "." not in cookie_value:
         return None
@@ -68,7 +87,7 @@ def unsign_token(cookie_value: str) -> str | None:
     expected = _sign(raw_token)
     # Constant-time compare to avoid leaking the signature byte-by-byte.
     if not hmac.compare_digest(sig, expected):
-        return None
+        raise CookieSignatureInvalid()
     return raw_token
 
 
@@ -96,3 +115,41 @@ def set_session_cookie(response: Response, token: str) -> None:
 
 def clear_session_cookie(response: Response) -> None:
     response.delete_cookie(**_cookie_kwargs())
+
+
+# ── Device cookie ────────────────────────────────────────────────────────
+# Long-lived browser identifier used to recognise a returning device and
+# avoid spamming login_notification emails on every session. Same HMAC
+# signing as the session cookie (sign_token / unsign_token) so a tampered
+# value surfaces as CookieSignatureInvalid the same way.
+
+
+def get_device_cookie_key() -> str:
+    """Mirror of get_cookie_key() for the device cookie."""
+    if settings.COOKIE_SECURE:
+        return f"__Host-{settings.DEVICE_COOKIE_NAME}"
+    return settings.DEVICE_COOKIE_NAME
+
+
+def _device_cookie_kwargs() -> dict:
+    return {
+        "key": get_device_cookie_key(),
+        "httponly": True,
+        "secure": settings.COOKIE_SECURE,
+        "samesite": settings.COOKIE_SAMESITE,
+        "path": "/",
+        "domain": None,
+    }
+
+
+def set_device_cookie(response: Response, token: str) -> None:
+    """Persist a fresh / refreshed device token into the browser."""
+    response.set_cookie(
+        value=sign_token(token),
+        max_age=settings.DEVICE_COOKIE_TTL_DAYS * 86400,
+        **_device_cookie_kwargs(),
+    )
+
+
+def clear_device_cookie(response: Response) -> None:
+    response.delete_cookie(**_device_cookie_kwargs())

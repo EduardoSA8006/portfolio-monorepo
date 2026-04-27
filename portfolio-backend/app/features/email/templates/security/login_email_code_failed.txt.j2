@@ -1,0 +1,22 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] Email code verification failed
+
+Someone authenticated with a valid password but failed the email-2FA
+challenge — they could not produce the 6-digit code we sent to the
+account email. One occurrence is usually a typo or a delayed mailbox;
+repeated ones from new IPs are an attack signal.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+Implication: the password is known to the requester.
+
+What to do:
+  1. If the IP is unfamiliar, rotate the admin password immediately.
+  2. Cross-reference auth_events for bursts from one IP.
+  3. If you saw the code but typo'd it, ignore — code_store burned it.
+{%- endblock %}

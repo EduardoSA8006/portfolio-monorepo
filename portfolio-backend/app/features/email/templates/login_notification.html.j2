@@ -1,0 +1,32 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "info" %}
+
+{% block preheader %}A new sign-in to your admin account just succeeded.{% endblock %}
+
+{% block header_eyebrow %}Sign-in{% endblock %}
+{% block header_title %}New sign-in to your account{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">Hi {{ name }},</p>
+
+<p style="margin:0 0 4px 0;font-size:14px;color:#475569;">
+  A new sign-in to your admin account just succeeded.
+</p>
+
+{{ m.kv_table([
+  ("When", when_str),
+  ("IP",   ip),
+  ("Agent", user_agent or '(no user-agent)'),
+]) }}
+
+{{ m.callout(
+  "info",
+  "If this was you, no action is needed."
+) }}
+
+{{ m.action_list([
+  "If it wasn't you, reset your password and TOTP via the admin recovery runbook.",
+  "Review recent auth_events rows for unfamiliar IPs.",
+]) }}
+{% endblock %}

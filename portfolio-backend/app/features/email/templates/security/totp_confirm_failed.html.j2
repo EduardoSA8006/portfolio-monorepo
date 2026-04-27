@@ -1,0 +1,36 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "warning" %}
+
+{% block preheader %}A TOTP enrollment failed at the confirm step.{% endblock %}
+
+{% block header_eyebrow %}Enrollment failure{% endblock %}
+{% block header_title %}TOTP enrollment confirm failed{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  A TOTP enrollment attempt failed at the confirmation step — the
+  authenticator generated a code that didn't match the server-side
+  secret. Usually a clock-skew issue on the device or someone scanning
+  the wrong QR.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "warning",
+  "Repeated failures from one IP are suspicious — a successful enroll
+   would let an attacker bind their own authenticator to your account."
+) }}
+
+{{ m.action_list([
+  "If you weren't enrolling, revoke the in-flight enrollment by re-running totp/enroll yourself; this overwrites the pending secret.",
+  "If the failure was you on a new device, re-scan the fresh QR — the previous secret is now stale.",
+]) }}
+{% endblock %}

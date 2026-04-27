@@ -1,0 +1,22 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] TOTP disable attempt rejected
+
+A request to disable TOTP on the admin account was rejected — the
+caller could not produce a valid current TOTP code or the session
+state diverged mid-flight.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+Whoever tried this had a working session AND knew TOTP was on. That
+is not a casual probe.
+
+What to do:
+  1. Identify the originating session (auth_events row carries user_id).
+  2. If the session IP is unfamiliar, assume the cookie is leaked.
+  3. Repeat attempts mean iterative guessing — escalate.
+{%- endblock %}

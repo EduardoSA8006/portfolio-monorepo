@@ -1,0 +1,22 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] TOTP verification failed
+
+Someone authenticated with a valid password but failed the TOTP
+challenge. One occurrence is usually a typo or a stale clock; repeated
+ones from new IPs are an attack signal.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+Implications: the password is known to the requester. If this IP is
+not yours, treat the password as compromised.
+
+What to do:
+  1. If the IP is unfamiliar, rotate the admin password immediately.
+  2. Look at auth_events for bursts of login_mfa_failed from one IP.
+  3. From a familiar IP, no action — replay guard handled it.
+{%- endblock %}

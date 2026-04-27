@@ -89,3 +89,39 @@ class CaptchaInvalidError(AppException):
     status_code = 401
     detail = "Captcha verification failed"
     code = "AUTH_CAPTCHA_INVALID"
+
+
+# ── Email-based 2FA ─────────────────────────────────────────────────────────
+
+
+class EmailCodeInvalidError(AppException):
+    """The submitted email-2FA code did not match (or attempt budget hit).
+
+    Same status as TOTPInvalidError so the frontend treats both MFA
+    methods symmetrically — generic 'wrong code' UI."""
+
+    status_code = 401
+    detail = "Invalid verification code"
+    code = "AUTH_EMAIL_CODE_INVALID"
+
+
+class Email2FAUnavailableError(AppException):
+    """Caller asked for a path that needs SMTP, but EMAIL_ENABLED is off
+    OR the user has no email on file. Distinct status (409) so the
+    frontend can show 'check your config' instead of 'try again'."""
+
+    status_code = 409
+    detail = "Email 2FA is not available — SMTP not configured or address missing"
+    code = "AUTH_EMAIL_2FA_UNAVAILABLE"
+
+
+class Email2FAAlreadyEnabledError(AppException):
+    status_code = 409
+    detail = "Email 2FA is already enabled for this account"
+    code = "AUTH_EMAIL_2FA_ALREADY_ENABLED"
+
+
+class Email2FANotEnabledError(AppException):
+    status_code = 409
+    detail = "Email 2FA is not enabled for this account"
+    code = "AUTH_EMAIL_2FA_NOT_ENABLED"

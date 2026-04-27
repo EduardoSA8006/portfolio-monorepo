@@ -1,0 +1,37 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "warning" %}
+
+{% block preheader %}A login passed the password check but failed the email-code step.{% endblock %}
+
+{% block header_eyebrow %}MFA failure{% endblock %}
+{% block header_title %}Email code verification failed{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  Someone authenticated with a valid password but failed the
+  email-2FA challenge — they could not produce the 6-digit code that
+  we sent to the account email. One occurrence is usually a typo or a
+  delayed mailbox; repeated ones from new IPs are an attack signal.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "warning",
+  "Implication: the password is known to the requester. If the IP is
+   not yours, treat the password as compromised."
+) }}
+
+{{ m.action_list([
+  "If the IP is unfamiliar, rotate the admin password immediately.",
+  "Cross-reference auth_events for bursts of login_email_code_failed from one IP.",
+  "If you saw the code in your inbox but typo'd it, no action — code_store burned the attempt.",
+]) }}
+{% endblock %}

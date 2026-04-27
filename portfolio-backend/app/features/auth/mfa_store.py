@@ -60,13 +60,68 @@ return user_id
 """
 
 
-async def create_challenge(redis: Redis, user_id: str) -> str:
-    """Issue a new MFA challenge for the given user. Returns the challenge token."""
+async def create_challenge(
+    redis: Redis,
+    user_id: str,
+    *,
+    method: str = "totp",
+    email: str | None = None,
+    client_ip: str | None = None,
+    user_agent: str | None = None,
+    is_new_device: bool = False,
+) -> str:
+    """Issue a new MFA challenge for the given user. Returns the challenge token.
+
+    `method` records which second-factor flow this challenge belongs to
+    (`"totp"` for the authenticator-app path, `"email"` for the
+    email-code path). Verify endpoints check the method before
+    consuming so a TOTP code submitted to the email endpoint (or vice
+    versa) hard-fails — preventing one verification path from spending
+    a challenge meant for the other.
+
+    The optional fields ride along inside the same Redis hash so the
+    verify endpoint can fire a `login_notification` email after success
+    without re-deriving the request context (the verify request is a
+    separate HTTP call and does not see the original login form).
+
+    All fields are stored as plain strings — Redis hash values are byte
+    strings either way, and the challenge TTL is short
+    (MFA_CHALLENGE_TTL_SECONDS, ~5 min), so PII exposure is bounded.
+    """
     token = _gen_challenge_token()
     key = _ck(token)
-    await redis.hset(key, mapping={"user_id": user_id, "attempts": 0})
+    payload: dict[str, str | int] = {
+        "user_id": user_id,
+        "attempts": 0,
+        "method": method,
+    }
+    if email:
+        payload["email"] = email
+    if client_ip:
+        payload["client_ip"] = client_ip
+    if user_agent:
+        # Cap user-agent length so a hostile UA cannot inflate the hash
+        # past a sensible bound.
+        payload["user_agent"] = user_agent[:500]
+    payload["is_new_device"] = "1" if is_new_device else "0"
+
+    await redis.hset(key, mapping=payload)
     await redis.expire(key, settings.MFA_CHALLENGE_TTL_SECONDS)
     return token
+
+
+async def get_challenge_metadata(redis: Redis, challenge_token: str) -> dict[str, str]:
+    """Read the full challenge hash. Caller must have already passed
+    consume_attempt — we use this in verify_mfa to extract the device /
+    email metadata before the challenge gets revoked."""
+    raw = await redis.hgetall(_ck(challenge_token))
+    if not raw:
+        return {}
+
+    def _decode(value):
+        return value.decode() if isinstance(value, (bytes, bytearray)) else value
+
+    return {_decode(k): _decode(v) for k, v in raw.items()}
 
 
 async def consume_attempt(redis: Redis, challenge_token: str) -> str:
@@ -77,7 +132,7 @@ async def consume_attempt(redis: Redis, challenge_token: str) -> str:
     has exceeded MFA_MAX_ATTEMPTS (in which case the challenge is deleted).
     """
     try:
-        user_id: str = await redis.eval(
+        raw = await redis.eval(
             _CONSUME_ATTEMPT,
             1,
             _ck(challenge_token),
@@ -88,7 +143,9 @@ async def consume_attempt(redis: Redis, challenge_token: str) -> str:
         if "CHALLENGE_NOT_FOUND" in msg or "CHALLENGE_OVER_LIMIT" in msg:
             raise ChallengeInvalidError from exc
         raise
-    return user_id
+    # redis-py returns bytes from HGET unless decode_responses=True;
+    # normalize so callers can pass into uuid.UUID without TypeError.
+    return raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
 
 
 async def revoke_challenge(redis: Redis, challenge_token: str) -> None:

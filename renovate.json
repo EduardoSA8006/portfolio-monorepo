@@ -1,0 +1,53 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard",
+    "schedule:weekly"
+  ],
+  "timezone": "America/Sao_Paulo",
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "dependencies"]
+  },
+  "packageRules": [
+    {
+      "description": "Group all non-major Python deps together so the queue does not flood.",
+      "matchManagers": ["poetry"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "python-deps (non-major)"
+    },
+    {
+      "description": "Group all non-major npm deps together.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "npm-deps (non-major)"
+    },
+    {
+      "description": "Pin Docker base images by digest (matches what the repo already does).",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "pinDigests": true
+    },
+    {
+      "description": "Major version bumps: keep them in their own PRs so review is focused.",
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["major-bump"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Security advisories should not wait for the weekly schedule.",
+      "matchDatasources": ["pypi", "npm"],
+      "matchUpdateTypes": ["patch", "minor", "major"],
+      "vulnerabilityAlerts": {
+        "schedule": ["at any time"]
+      }
+    }
+  ]
+}

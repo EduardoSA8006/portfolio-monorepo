@@ -1,0 +1,35 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "warning" %}
+
+{% block preheader %}All admin sessions were just revoked.{% endblock %}
+
+{% block header_eyebrow %}Session sweep{% endblock %}
+{% block header_title %}All admin sessions revoked{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  Every active session for the admin account was just deleted. Any
+  open browser tab will surface a 401 on the next request.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "warning",
+  "If the sweep was intentional (incident response, lost device,
+   periodic hygiene) — done. If it wasn't, an attacker with a working
+   session may have triggered it as a denial-of-service against you."
+) }}
+
+{{ m.action_list([
+  "Sign in again from a known device.",
+  "If you didn't initiate the sweep, treat the originating session as compromised — auth_events carries the user_id and IP.",
+]) }}
+{% endblock %}

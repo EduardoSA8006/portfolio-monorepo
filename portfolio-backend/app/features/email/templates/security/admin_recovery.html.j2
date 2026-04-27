@@ -1,0 +1,38 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "critical" %}
+
+{% block preheader %}create_admin.py --reset just ran for the admin account.{% endblock %}
+
+{% block header_eyebrow %}Recovery executed{% endblock %}
+{% block header_title %}Admin recovery via runbook{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  Someone executed <code style="background:#e2e8f0;padding:1px 4px;border-radius:3px;">create_admin.py --reset</code>
+  on the admin account. Both the password and TOTP secret were rotated.
+  This path requires shell access to the production host.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "critical",
+  "If you did NOT execute this recovery, the host is compromised at the
+   shell level. The application's auth surface is no longer the bound
+   on what an attacker can do."
+) }}
+
+{{ m.action_list([
+  "Pull the SSH access logs for the production VPS around the timestamp.",
+  "Rotate every secret in .env (SECRET_KEY, EMAIL_PEPPER, all DB and Redis passwords).",
+  "Audit the host for unfamiliar SSH keys, new sudoers entries, or scheduled tasks.",
+  "If the host cannot be trusted, redeploy the stack onto a fresh VM and rotate from .env.example.",
+]) }}
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+Hi {{ name }},
+
+Your sign-in verification code is: {{ code }}
+
+It expires in {{ ttl_minutes }} minute{% if ttl_minutes != 1 %}s{% endif %}.
+
+If you did not request this code, ignore this email and consider
+changing your password - someone may have your credentials.
+{%- endblock %}

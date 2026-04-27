@@ -1,0 +1,22 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] All admin sessions revoked
+
+Every active session for the admin account was just deleted. Any
+open tab will see 401 on its next request.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+If the sweep was intentional (incident response, lost device, hygiene),
+no action. If it wasn't, an attacker with a working session may have
+triggered it as a DoS against you.
+
+What to do:
+  1. Sign in again from a known device.
+  2. If you didn't initiate the sweep, treat the originating session
+     as compromised (auth_events row carries user_id + IP).
+{%- endblock %}

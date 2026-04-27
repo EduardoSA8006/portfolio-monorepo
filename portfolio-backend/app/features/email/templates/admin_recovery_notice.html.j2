@@ -1,0 +1,37 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "critical" %}
+
+{% block preheader %}Your admin password and TOTP were just reset.{% endblock %}
+
+{% block header_eyebrow %}Account recovery{% endblock %}
+{% block header_title %}Password + TOTP reset{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">Hi {{ name }},</p>
+
+<p style="margin:0 0 4px 0;font-size:14px;color:#475569;">
+  Your admin credentials (password and TOTP) were just reset via the recovery runbook.
+</p>
+
+{{ m.kv_table([
+  ("When", when_str),
+  ("From", ip),
+]) }}
+
+{{ m.callout(
+  "info",
+  "If you executed this recovery yourself, no action is required."
+) }}
+
+{{ m.callout(
+  "critical",
+  "If you did NOT, the host that runs the application has been compromised. Treat as an incident."
+) }}
+
+{{ m.action_list([
+  "Rotate every secret in .env: SECRET_KEY, EMAIL_PEPPER, all DB / Redis passwords.",
+  "Audit every auth_events row since the recovery for unfamiliar IPs and unexpected event_types.",
+  "Revoke any outstanding sessions: redis-cli SCAN auth:session:* | xargs DEL.",
+]) }}
+{% endblock %}

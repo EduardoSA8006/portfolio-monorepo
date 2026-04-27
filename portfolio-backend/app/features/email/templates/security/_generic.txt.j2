@@ -1,0 +1,17 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] {{ event_type }}
+
+A security-relevant event landed in auth_events. There is no dedicated
+template registered for `{{ event_type }}` yet — this is the generic
+fallback.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+Cross-reference the auth_events table for the structured row using
+event_type + a tight timestamp window.
+{%- endblock %}

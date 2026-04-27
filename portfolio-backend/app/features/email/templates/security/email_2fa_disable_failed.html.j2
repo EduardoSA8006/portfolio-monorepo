@@ -1,0 +1,36 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "warning" %}
+
+{% block preheader %}A request to disable email 2FA was rejected.{% endblock %}
+
+{% block header_eyebrow %}MFA tampering{% endblock %}
+{% block header_title %}Email 2FA disable rejected{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  A request to disable email 2FA was rejected — the caller could not
+  produce a valid current email code. They had a working session, knew
+  the disable endpoint, but did not have the email inbox.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "warning",
+  "The session origin is the suspicious party here — they had cookie
+   access but not email access. Treat the session as leaked."
+) }}
+
+{{ m.action_list([
+  "Identify the originating session — auth_events row carries the user_id.",
+  "If the session IP is unfamiliar, force logout (sessions_cleared) and rotate the password.",
+  "If you tried this and just typo'd the code, you can ignore the alert.",
+]) }}
+{% endblock %}

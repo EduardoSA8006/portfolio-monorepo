@@ -1,0 +1,24 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] Invalid cookie signature
+
+A request arrived with a session cookie whose HMAC signature did not
+verify against SECRET_KEY. The request was rejected before reaching
+Redis or the database.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+Possible causes: an attacker probing forged cookies, OR a legitimate
+client with a cookie issued before the latest SECRET_KEY rotation.
+
+What to do:
+  1. Cross-reference auth_events for repeat rows from this IP in the
+     last hour.
+  2. If the source IP is unfamiliar and clusters with other probes,
+     add it to your edge blocklist.
+  3. If you just rotated SECRET_KEY, the count will fall on its own.
+{%- endblock %}

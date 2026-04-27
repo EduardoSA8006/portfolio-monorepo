@@ -26,6 +26,11 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        # Without this, autogenerate notices column type changes but
+        # silently misses server_default changes (e.g. shifting a
+        # boolean default from True to False). Wire it on both modes
+        # so dev and CI render the same diff against the live DB.
+        compare_server_default=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -42,6 +47,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            compare_server_default=True,
         )
         with context.begin_transaction():
             context.run_migrations()

@@ -1,0 +1,23 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] TOTP disabled on the admin account
+
+TOTP was successfully disabled on the admin account. Until it's
+re-enrolled, sign-in needs only the password.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+If you did not initiate this, the password was compromised AND the
+attacker held a valid TOTP code (the disable endpoint demands one).
+Treat as full account takeover in progress.
+
+What to do:
+  1. Rotate the password immediately.
+  2. Re-enroll TOTP on a fresh authenticator.
+  3. Revoke every session in Redis (SCAN auth:session:* | DEL).
+  4. Audit the login_success that preceded this disable.
+{%- endblock %}

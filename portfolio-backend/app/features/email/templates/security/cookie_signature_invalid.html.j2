@@ -1,0 +1,36 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "critical" %}
+
+{% block preheader %}A request arrived with a cookie whose HMAC signature did not verify — likely forgery or stale post-rotation cookie.{% endblock %}
+
+{% block header_eyebrow %}Forgery attempt{% endblock %}
+{% block header_title %}Invalid cookie signature{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  A request arrived with a session cookie whose HMAC signature did not
+  verify against <code style="background:#e2e8f0;padding:1px 4px;border-radius:3px;">SECRET_KEY</code>.
+  The request was rejected before reaching Redis or the database.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "critical",
+  "Possible causes: an attacker probing forged cookies, OR a legitimate
+   client with a cookie issued before the latest SECRET_KEY rotation."
+) }}
+
+{{ m.action_list([
+  "Cross-reference auth_events for repeat 'cookie_signature_invalid' rows from the same IP within the last hour.",
+  "If the source IP is unfamiliar and clusters with other unauthenticated probes, add it to your edge blocklist.",
+  "If you rotated SECRET_KEY recently, the count will drop on its own as legitimate clients re-authenticate.",
+]) }}
+{% endblock %}

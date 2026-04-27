@@ -1,0 +1,39 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "critical" %}
+
+{% block preheader %}Lockout fired — distinct IPs failed login on the same email past the threshold.{% endblock %}
+
+{% block header_eyebrow %}Distributed attack{% endblock %}
+{% block header_title %}Login lockout triggered{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  The per-email lockout flag was just activated. Three or more distinct
+  IPs each exceeded their per-{IP, email} attempt budget against the
+  same target account inside the lockout window — a distributed-guess
+  pattern, not a single careless user.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("Latest IP", ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "critical",
+  "Active attack signal. The account is now locked from every IP for
+   LOGIN_LOCKOUT_SECONDS. The legitimate owner cannot sign in until the
+   window elapses."
+) }}
+
+{{ m.action_list([
+  "Pull the auth:rl:lockout_ips:{email_hash} set in Redis to enumerate the participating IPs.",
+  "If the IPs cluster on a known botnet ASN, blocklist the range at Traefik.",
+  "Notify the legitimate account owner via a side channel that login is paused.",
+  "Confirm the per-IP ban defense (auth:rl:ip_banned:*) also fired if the same IPs sprayed multiple emails.",
+]) }}
+{% endblock %}

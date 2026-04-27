@@ -1,0 +1,39 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{% set severity = "critical" %}
+
+{% block preheader %}Email-based 2FA was just disabled on the admin account.{% endblock %}
+
+{% block header_eyebrow %}MFA degraded{% endblock %}
+{% block header_title %}Email 2FA disabled{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  Email-based 2FA was just turned off on the admin account. The disable
+  endpoint demands a fresh email code (proof-of-possession of the
+  inbox), so whoever ran this either had access to your email OR
+  hijacked a session that still had access.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  "critical",
+  "If you did not initiate this, treat the live session AND the email
+   inbox as compromised — the disable would not have succeeded without
+   one of them."
+) }}
+
+{{ m.action_list([
+  "Rotate the admin password.",
+  "Re-enable email 2FA from a clean device after rotating.",
+  "Review the email inbox for forwarding rules / new auth tokens (M365 / Workspace dashboards).",
+  "Revoke every outstanding session in Redis (SCAN auth:session:* | DEL).",
+]) }}
+{% endblock %}

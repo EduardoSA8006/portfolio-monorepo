@@ -4,6 +4,22 @@ These files are the source of truth for the Traefik reverse proxy that sits
 in front of `api.eduardoalves.online` in production. They are **templates** —
 copy this directory to `/srv/traefik/` on the VPS and operate it from there.
 
+## Edge network policy
+
+The `edge` Docker network (172.28.0.0/16, created by
+`scripts/create-edge-network.sh`) is reserved for **this Traefik stack and
+the containers Traefik proxies** — currently the backend's `api` and
+`frontend` services. **Do not join other workloads to `edge`.**
+
+Why: the API trusts `X-Forwarded-For` only when it arrives from
+Traefik's pinned IP `172.28.0.10/32` (see `TRUSTED_PROXY_CIDRS` in the
+backend's `.env`). If you put another container on `edge`, that
+container can talk to the API and inject arbitrary client IPs, defeating
+per-IP rate limiting. If you really need an extra service on the
+public side, give it its own dedicated network and route it through a
+separate Traefik instance (or expand `TRUSTED_PROXY_CIDRS` only after a
+careful review).
+
 ## Files
 
 - `docker-compose.yml` — the Traefik service, bound to ports 80/443 on the host.

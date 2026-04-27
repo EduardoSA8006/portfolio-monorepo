@@ -1,0 +1,25 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] Login lockout triggered
+
+The per-email lockout flag was just activated. Three or more distinct
+IPs each exceeded their per-{IP, email} attempt budget against the
+same target account inside the lockout window — a distributed-guess
+pattern.
+
+  Event     : {{ event_type }}
+  When      : {{ when_str }}
+  Latest IP : {{ ip or '(unknown)' }}
+  Agent     : {{ user_agent or '(none)' }}
+  Reason    : {{ extra or '(none)' }}
+
+Active attack signal. The account is now locked from every IP for
+LOGIN_LOCKOUT_SECONDS.
+
+What to do:
+  1. SMEMBERS auth:rl:lockout_ips:{email_hash} to list participating IPs.
+  2. If the IPs cluster on a botnet ASN, blocklist the range at Traefik.
+  3. Notify the legitimate owner via side channel that login is paused.
+  4. Confirm auth:rl:ip_banned:* fired if those IPs also sprayed
+     multiple emails.
+{%- endblock %}

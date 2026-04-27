@@ -41,6 +41,12 @@ providers:
     exposedByDefault: false
     network: edge
     watch: true
+  # Dynamic file provider for cross-stack middlewares (security headers,
+  # global rate limit). Container labels reference these by name — see
+  # deploy/traefik/dynamic/middlewares.yml.
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
 
 certificatesResolvers:
   letsencrypt:

@@ -1,0 +1,31 @@
+{% extends "_base.html.j2" %}
+{% import "_macros.html.j2" as m %}
+{# severity defaults to "warning" when the audit-side classifier has no
+   entry for this event — see templates.severity_for() #}
+
+{% block preheader %}Security event {{ event_type }} fired in audit.{% endblock %}
+
+{% block header_eyebrow %}Security event{% endblock %}
+{% block header_title %}{{ event_type }}{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 14px 0;font-size:14px;">
+  A security-relevant event landed in <code style="background:#e2e8f0;padding:1px 4px;border-radius:3px;">auth_events</code>.
+  This template is the generic fallback — there is no dedicated
+  template registered for <strong>{{ event_type }}</strong> yet.
+</p>
+
+{{ m.kv_table([
+  ("Event",  event_type),
+  ("When",   when_str),
+  ("IP",     ip),
+  ("Agent",  user_agent),
+  ("Reason", extra),
+]) }}
+
+{{ m.callout(
+  severity,
+  "Cross-reference the auth_events table for the structured row using
+   event_type + a tight timestamp window."
+) }}
+{% endblock %}

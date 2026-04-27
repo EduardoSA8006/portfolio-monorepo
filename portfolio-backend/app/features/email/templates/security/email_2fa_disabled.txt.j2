@@ -1,0 +1,23 @@
+{% extends "_base.txt.j2" %}
+{% block content -%}
+[SECURITY] Email 2FA disabled
+
+Email-based 2FA was just turned off on the admin account. The disable
+endpoint requires a current email code, so the actor had either email
+inbox access OR a hijacked live session.
+
+  Event  : {{ event_type }}
+  When   : {{ when_str }}
+  IP     : {{ ip or '(unknown)' }}
+  Agent  : {{ user_agent or '(none)' }}
+  Reason : {{ extra or '(none)' }}
+
+If you did not initiate this, treat the session AND email inbox as
+compromised.
+
+What to do:
+  1. Rotate the admin password.
+  2. Re-enable email 2FA from a clean device after rotating.
+  3. Review the email inbox for forwarding rules / new auth tokens.
+  4. Revoke every Redis session (SCAN auth:session:* | DEL).
+{%- endblock %}

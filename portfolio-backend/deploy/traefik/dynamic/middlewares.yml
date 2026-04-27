@@ -1,0 +1,40 @@
+# Cross-stack Traefik middlewares.
+#
+# Loaded by the file provider configured in traefik.yml. Containers opt
+# into them by name via labels, e.g.:
+#
+#   - "traefik.http.routers.<name>.middlewares=secure-headers@file,global-ratelimit@file"
+#
+# The `@file` suffix disambiguates the middleware namespace from
+# Docker-provider middlewares declared inline in container labels.
+
+http:
+  middlewares:
+    # Defense-in-depth security headers. The FastAPI process already
+    # emits these via SecurityHeadersMiddleware, but Traefik also serves
+    # responses that never reach the app (5xx error pages, ACME
+    # challenge responses, the dashboard if it ever gets enabled).
+    # Having Traefik attach the same headers means those edge-only
+    # responses are not the weakest link in the policy.
+    secure-headers:
+      headers:
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        referrerPolicy: "no-referrer"
+        contentSecurityPolicy: "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+        permissionsPolicy: "geolocation=(), camera=(), microphone=()"
+        frameDeny: true
+
+    # Coarse outer-bound rate limit applied to every router that opts in.
+    # Tuned well above realistic single-client traffic so it kicks in only
+    # under abuse (200 req/s sustained, 400 burst per source IP). The
+    # per-router middlewares (e.g. portfolio-api-ratelimit) sit on top and
+    # are tighter — this exists so a route that forgets to enroll in its
+    # own ratelimit is still not naked against a flood.
+    global-ratelimit:
+      rateLimit:
+        average: 200
+        burst: 400

@@ -1,0 +1,352 @@
+services:
+  postgres:
+    # Pinned by digest so a future `docker compose pull` cannot silently
+    # swap the image for a different layer set. Update with Renovate or
+    # by re-running `docker pull postgres:16-alpine && docker image
+    # inspect postgres:16-alpine --format '{{index .RepoDigests 0}}'`.
+    image: postgres:16-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
+    container_name: portfolio_postgres
+    restart: unless-stopped
+    # Forensic logging + pg_stat_statements:
+    #   - log_connections / log_disconnections give a paper trail of who
+    #     connected and when (DB-level, independent of the API audit log).
+    #   - log_statement=ddl logs every CREATE/ALTER/DROP — schema-injection
+    #     attempts surface in the postgres log instead of being invisible.
+    #   - pg_stat_statements aggregates query stats (extension is enabled
+    #     after `CREATE EXTENSION` but the library must be preloaded first).
+    command: >
+      postgres
+        -c log_connections=on
+        -c log_disconnections=on
+        -c log_statement=ddl
+        -c shared_preload_libraries=pg_stat_statements
+    # Postgres reads POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD natively
+    # from its container env. Source them from the backend .env directly —
+    # no Compose-level interpolation, no root .env duplication.
+    env_file:
+      - ./portfolio-backend/.env
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # `$$VAR` escapes Compose interpolation so the literal `$VAR` reaches the
+    # shell inside the container, where env_file values are already in scope.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    # Drop the full default capability set. Postgres on Linux runs fine
+    # without any of them; if a future kernel/extension reintroduces a
+    # need for mlock (e.g. shared_preload_libraries=pg_prewarm with
+    # huge_pages=on), uncomment cap_add: [IPC_LOCK].
+    cap_drop:
+      - ALL
+    # cap_add:
+    #   - IPC_LOCK
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+    networks:
+      - data_net
+
+  redis:
+    image: redis:7-alpine@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+    container_name: portfolio_redis
+    restart: unless-stopped
+    # Sessions / rate-limit / MFA challenges live here. The Celery worker does
+    # NOT have access to this instance — it uses redis_celery instead, on a
+    # different Docker network, with a different requirepass. A compromised
+    # Celery task therefore cannot scan or rewrite auth:session:* keys.
+    #
+    # Hardening:
+    #   - maxmemory + allkeys-lru caps memory growth and evicts oldest keys
+    #     instead of crashing the container.
+    #   - rename-command "" disables FLUSHDB / FLUSHALL / CONFIG entirely
+    #     (not even the redis-cli with the right password can reach them).
+    #     A compromised app process therefore cannot blow away every
+    #     session in one call.
+    # `sh -c` so REDIS_PASSWORD (loaded from env_file below) is expanded by
+    # the container shell at boot, not by Compose. `$$VAR` reaches the shell
+    # as `$VAR`. Compose-time interpolation is gone: secrets stay in
+    # ./portfolio-backend/.env and never need a root-level duplicate.
+    command:
+      - sh
+      - -c
+      - |
+        exec redis-server \
+          --appendonly yes \
+          --requirepass "$$REDIS_PASSWORD" \
+          --maxmemory 256mb \
+          --maxmemory-policy allkeys-lru \
+          --rename-command FLUSHDB "" \
+          --rename-command FLUSHALL "" \
+          --rename-command CONFIG ""
+    env_file:
+      - ./portfolio-backend/.env
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    # Redis runs without any Linux capabilities. If the deployment needs
+    # `--maxmemory-policy` with mlock-backed huge pages, uncomment
+    # cap_add: [IPC_LOCK]; the default config does not.
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+    networks:
+      - sessions_net
+
+  redis_celery:
+    image: redis:7-alpine@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+    container_name: portfolio_redis_celery
+    restart: unless-stopped
+    # Dedicated broker + result backend for Celery. Isolated on celery_net so
+    # the API container has no route to it. Same hardening as the sessions
+    # Redis — destructive admin commands are renamed to "".
+    command:
+      - sh
+      - -c
+      - |
+        exec redis-server \
+          --appendonly yes \
+          --requirepass "$$CELERY_REDIS_PASSWORD" \
+          --maxmemory 128mb \
+          --maxmemory-policy allkeys-lru \
+          --rename-command FLUSHDB "" \
+          --rename-command FLUSHALL "" \
+          --rename-command CONFIG ""
+    env_file:
+      - ./portfolio-backend/.env
+    expose:
+      - "6379"
+    volumes:
+      - redis_celery_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$CELERY_REDIS_PASSWORD\" ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
+    networks:
+      - celery_net
+
+  api:
+    build:
+      context: ./portfolio-backend
+      dockerfile: Dockerfile
+    container_name: portfolio_api
+    restart: unless-stopped
+    # No `ports:` — the host never exposes 8000. Traefik (on the `edge`
+    # network) is the only path from the internet to this container.
+    expose:
+      - "8000"
+    env_file:
+      - ./portfolio-backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    # FastAPI/uvicorn under a non-root user need none of the Linux
+    # capabilities the Docker default set carries (NET_RAW, SETUID,
+    # SETGID, etc.). Drop them all — narrows the kernel attack surface
+    # if the Python process is ever compromised.
+    cap_drop:
+      - ALL
+    healthcheck:
+      # Hits the in-process /health (liveness) — confirms uvicorn started
+      # AND the FastAPI app's middleware stack is live. start_period
+      # covers cold starts where the worker is busy importing.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+    # API talks to Postgres (data_net), sessions Redis (sessions_net), the
+    # frontend container (web_net), and faces the internet through Traefik
+    # (edge). It has NO route to redis_celery, by design.
+    networks:
+      - data_net
+      - sessions_net
+      - web_net
+      - edge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=edge"
+      - "traefik.http.routers.portfolio-api.rule=Host(`api.eduardoalves.online`)"
+      - "traefik.http.routers.portfolio-api.entrypoints=websecure"
+      - "traefik.http.routers.portfolio-api.tls=true"
+      - "traefik.http.routers.portfolio-api.tls.certresolver=letsencrypt"
+      # `@file` references the cross-stack middlewares from
+      # deploy/traefik/dynamic/middlewares.yml. Per-router middlewares
+      # (declared inline below) live in the docker provider namespace
+      # and need no suffix.
+      - "traefik.http.routers.portfolio-api.middlewares=secure-headers@file,global-ratelimit@file,portfolio-api-bodylimit,portfolio-api-ratelimit"
+      # Reject oversized bodies upstream so a 10 GB POST never reaches the
+      # API container. Mirrors REQUEST_BODY_MAX_BYTES in app/core/config.py
+      # (in-process safety net) — keep them in sync.
+      - "traefik.http.middlewares.portfolio-api-bodylimit.buffering.maxRequestBodyBytes=65536"
+      # Per-IP rate limit. /health is a cheap liveness probe and an
+      # easy fingerprinting/DoS target; this caps any single source at
+      # 60 req/s sustained, 120 burst. Auth endpoints have their own
+      # per-{IP,email} and per-IP gates inside the app — Traefik's
+      # limit here is just a coarse outer bound.
+      # Traefik is the edge — no proxy in front of it — so RemoteAddr is
+      # the real client IP and no ipstrategy override is needed.
+      - "traefik.http.middlewares.portfolio-api-ratelimit.ratelimit.average=60"
+      - "traefik.http.middlewares.portfolio-api-ratelimit.ratelimit.burst=120"
+      - "traefik.http.services.portfolio-api.loadbalancer.server.port=8000"
+
+  celery:
+    build:
+      context: ./portfolio-backend
+      dockerfile: Dockerfile
+    container_name: portfolio_celery
+    restart: unless-stopped
+    command: ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=4"]
+    env_file:
+      - ./portfolio-backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis_celery:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+    # Celery needs Postgres for reads/writes from tasks, plus its own Redis.
+    # It has NO route to the sessions Redis — task poisoning cannot reach
+    # auth:session:* keys across the Docker network boundary.
+    networks:
+      - data_net
+      - celery_net
+
+  frontend:
+    build:
+      context: ./portfolio-frontend
+      dockerfile: Dockerfile
+      args:
+        # Browsers fetch the API at the host-published port, not via Docker
+        # DNS — the container name `api` is unreachable from the user's
+        # browser. Inlined into the bundle at build time.
+        # Fail-closed: no default. A missing value would bake the wrong API
+        # host into the production bundle (e.g. localhost:8000), so the
+        # variable is mandatory in every environment.
+        #
+        # The value lives in portfolio-frontend/.env and reaches Compose via:
+        #   docker compose --env-file portfolio-frontend/.env build frontend
+        # Any compose command that triggers a frontend build needs the same
+        # `--env-file portfolio-frontend/.env` flag. Per-environment values:
+        #   dev  → NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+        #   prod → NEXT_PUBLIC_API_BASE_URL=https://api.eduardoalves.online
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required — pass --env-file portfolio-frontend/.env to docker compose}
+    container_name: portfolio_frontend
+    restart: unless-stopped
+    # No `ports:` — host publishing belongs in the dev override. Production
+    # reaches the container through Traefik on the `edge` network.
+    expose:
+      - "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+    # web_net = frontend ↔ api (server-side fetches inside RSC).
+    # edge    = Traefik ingress in production.
+    networks:
+      - web_net
+      - edge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=edge"
+      - "traefik.http.routers.portfolio-frontend.rule=Host(`eduardoalves.online`) || Host(`www.eduardoalves.online`)"
+      - "traefik.http.routers.portfolio-frontend.entrypoints=websecure"
+      - "traefik.http.routers.portfolio-frontend.tls=true"
+      - "traefik.http.routers.portfolio-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.portfolio-frontend.middlewares=global-ratelimit@file"
+      # No secure-headers@file on the frontend: Next.js needs script-src and
+      # style-src for its bundle. Apply route-specific CSP through Next.js
+      # config (next.config.ts) instead — leaving Traefik's secure-headers
+      # off here avoids fighting the framework.
+      - "traefik.http.services.portfolio-frontend.loadbalancer.server.port=3000"
+
+volumes:
+  postgres_data:
+  redis_data:
+  redis_celery_data:
+
+networks:
+  # data_net: Postgres lives here. API and Celery both join to read/write
+  # application data. DB is isolated from anything else.
+  data_net:
+    driver: bridge
+  # sessions_net: API <-> Redis (sessions, CSRF, rate-limits, MFA).
+  # Celery has no route here.
+  sessions_net:
+    driver: bridge
+  # celery_net: Celery <-> redis_celery. API has no route here.
+  celery_net:
+    driver: bridge
+  # web_net: frontend container <-> API for server-side fetches (RSC, route
+  # handlers). Browsers don't traverse this — they reach the API through the
+  # host-published port (or Traefik in prod).
+  web_net:
+    driver: bridge
+  # `edge` is created externally (see scripts/create-edge-network.sh) so the
+  # Traefik stack in /srv/traefik/ can share it. Subnet is pinned to
+  # 172.28.0.0/16 — if you change it, update TRUSTED_PROXY_CIDRS in .env.
+  edge:
+    external: true
