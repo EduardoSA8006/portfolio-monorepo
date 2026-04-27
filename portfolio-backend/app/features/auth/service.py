@@ -161,7 +161,7 @@ async def login(
             ip=client_ip,
             user_agent=user_agent,
         )
-        raise InvalidCredentialsError()
+        raise InvalidCredentialsError(captcha_required=True)
 
     if not user.is_active:
         verify_password(password, _DUMMY_HASH)
@@ -177,7 +177,7 @@ async def login(
             ip=client_ip,
             user_agent=user_agent,
         )
-        raise InvalidCredentialsError()
+        raise InvalidCredentialsError(captcha_required=True)
 
     if not verify_password(password, user.password_hash):
         await rate_limit.register_login_failure(redis, client_ip, email_hash)
@@ -192,7 +192,7 @@ async def login(
             ip=client_ip,
             user_agent=user_agent,
         )
-        raise InvalidCredentialsError()
+        raise InvalidCredentialsError(captcha_required=True)
 
     await _maybe_rehash_password_hash(user, password, db)
     await rate_limit.reset_login_rate(redis, client_ip, email_hash)

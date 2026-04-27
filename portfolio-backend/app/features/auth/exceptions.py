@@ -6,6 +6,18 @@ class InvalidCredentialsError(AppException):
     detail = "Invalid email or password"
     code = "AUTH_INVALID_CREDENTIALS"
 
+    def __init__(
+        self,
+        detail: str | None = None,
+        code: str | None = None,
+        captcha_required: bool = False,
+    ) -> None:
+        super().__init__(
+            detail=detail,
+            code=code,
+            extra={"captcha_required": captcha_required},
+        )
+
 
 class AccountDisabledError(AppException):
     status_code = 403

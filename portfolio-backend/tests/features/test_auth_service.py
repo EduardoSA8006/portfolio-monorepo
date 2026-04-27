@@ -337,3 +337,38 @@ async def test_login_skips_captcha_when_degraded(monkeypatch):
             captcha_token="any",
         )
     assert verify_called is False
+
+
+@pytest.mark.asyncio
+async def test_login_invalid_credentials_carries_captcha_required_flag(monkeypatch):
+    from app.features.auth import service
+    from app.features.auth.exceptions import InvalidCredentialsError
+    from app.features.auth.rate_limit import RateCheckResult
+
+    async def fake_check(redis, ip, eh):
+        return RateCheckResult(captcha_required=False, degraded=False)
+
+    async def fake_register(redis, ip, eh):
+        pass
+
+    async def fake_get_by_email_hash(eh, db):
+        return None
+
+    async def fake_record_event(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(service.rate_limit, "check_login_rate", fake_check)
+    monkeypatch.setattr(service.rate_limit, "register_login_failure", fake_register)
+    monkeypatch.setattr(service.repository, "get_by_email_hash", fake_get_by_email_hash)
+    monkeypatch.setattr(service, "_record_event", fake_record_event)
+
+    with pytest.raises(InvalidCredentialsError) as exc_info:
+        await service.login(
+            email="a@b.c",
+            password="whatever1",
+            client_ip="1.1.1.1",
+            db=None,
+            redis=None,
+            captcha_token=None,
+        )
+    assert exc_info.value.extra == {"captcha_required": True}
