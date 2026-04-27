@@ -150,7 +150,7 @@ async def login(
 
     if user is None:
         verify_password(password, _DUMMY_HASH)
-        await rate_limit.register_login_failure(redis, client_ip, email_hash)
+        failure = await rate_limit.register_login_failure(redis, client_ip, email_hash)
         logger.info(
             "login.failed",
             extra={"reason": "user_not_found", "email_hash": email_hash, "ip": client_ip},
@@ -161,11 +161,17 @@ async def login(
             ip=client_ip,
             user_agent=user_agent,
         )
+        if failure.lockout_triggered:
+            await _record_event(
+                event_type="login_lockout_triggered",
+                ip=client_ip,
+                user_agent=user_agent,
+            )
         raise InvalidCredentialsError(captcha_required=True)
 
     if not user.is_active:
         verify_password(password, _DUMMY_HASH)
-        await rate_limit.register_login_failure(redis, client_ip, email_hash)
+        failure = await rate_limit.register_login_failure(redis, client_ip, email_hash)
         logger.info(
             "login.failed",
             extra={"reason": "account_disabled", "user_id": str(user.id), "ip": client_ip},
@@ -177,10 +183,17 @@ async def login(
             ip=client_ip,
             user_agent=user_agent,
         )
+        if failure.lockout_triggered:
+            await _record_event(
+                event_type="login_lockout_triggered",
+                user_id=str(user.id),
+                ip=client_ip,
+                user_agent=user_agent,
+            )
         raise InvalidCredentialsError(captcha_required=True)
 
     if not verify_password(password, user.password_hash):
-        await rate_limit.register_login_failure(redis, client_ip, email_hash)
+        failure = await rate_limit.register_login_failure(redis, client_ip, email_hash)
         logger.info(
             "login.failed",
             extra={"reason": "bad_password", "user_id": str(user.id), "ip": client_ip},
@@ -192,6 +205,13 @@ async def login(
             ip=client_ip,
             user_agent=user_agent,
         )
+        if failure.lockout_triggered:
+            await _record_event(
+                event_type="login_lockout_triggered",
+                user_id=str(user.id),
+                ip=client_ip,
+                user_agent=user_agent,
+            )
         raise InvalidCredentialsError(captcha_required=True)
 
     await _maybe_rehash_password_hash(user, password, db)

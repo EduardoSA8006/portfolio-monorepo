@@ -47,6 +47,13 @@ class RateCheckResult:
     degraded: bool
 
 
+@dataclass(frozen=True)
+class FailureRegistration:
+    counter: int
+    sadd_triggered: bool
+    lockout_triggered: bool
+
+
 # Read-only check. KEYS: lockout, captcha, degraded.
 # Returns {is_locked, captcha_required, degraded}.
 _CHECK_STATE = """
@@ -129,15 +136,23 @@ async def check_login_rate(redis: Redis, ip: str, email_hash: str) -> RateCheckR
     )
 
 
-async def register_login_failure(redis: Redis, ip: str, email_hash: str) -> None:
+async def register_login_failure(
+    redis: Redis, ip: str, email_hash: str
+) -> FailureRegistration:
     """
     Called after a confirmed password failure (post-captcha).
     Increments counter, sets captcha flag, and — if threshold exceeded — adds IP
     to the lockout_ips set; if distinct IPs >= LOCKOUT_DISTINCT_IPS, sets the
     global lockout flag.
+
+    Returns FailureRegistration with three signals:
+      - counter: current failure count for this IP+email pair
+      - sadd_triggered: whether this call added the IP to the lockout set
+      - lockout_triggered: whether this call activated the global lockout flag
+        (true at most once per lockout window — subsequent calls return false)
     """
     script = _get_register_failure_script(redis)
-    await script(
+    result: list[int] = await script(
         keys=[
             _rl_key(ip, email_hash),
             _captcha_key(ip, email_hash),
@@ -154,6 +169,12 @@ async def register_login_failure(redis: Redis, ip: str, email_hash: str) -> None
             str(settings.LOGIN_LOCKOUT_DISTINCT_IPS),
             ip,
         ],
+    )
+    counter, sadd_triggered, lockout_triggered = result
+    return FailureRegistration(
+        counter=int(counter),
+        sadd_triggered=bool(sadd_triggered),
+        lockout_triggered=bool(lockout_triggered),
     )
 
 

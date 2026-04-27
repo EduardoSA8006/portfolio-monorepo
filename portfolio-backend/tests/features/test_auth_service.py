@@ -304,7 +304,7 @@ async def test_login_raises_captcha_required_when_required_and_no_token(monkeypa
 async def test_login_skips_captcha_when_degraded(monkeypatch):
     from app.features.auth import service
     from app.features.auth.exceptions import InvalidCredentialsError
-    from app.features.auth.rate_limit import RateCheckResult
+    from app.features.auth.rate_limit import FailureRegistration, RateCheckResult
 
     async def fake_check(redis, ip, eh):
         return RateCheckResult(captcha_required=True, degraded=True)
@@ -320,7 +320,7 @@ async def test_login_skips_captcha_when_degraded(monkeypatch):
         return None
 
     async def fake_register(redis, ip, eh):
-        pass
+        return FailureRegistration(counter=1, sadd_triggered=False, lockout_triggered=False)
 
     monkeypatch.setattr(service.rate_limit, "check_login_rate", fake_check)
     monkeypatch.setattr(service.rate_limit, "register_login_failure", fake_register)
@@ -343,13 +343,13 @@ async def test_login_skips_captcha_when_degraded(monkeypatch):
 async def test_login_invalid_credentials_carries_captcha_required_flag(monkeypatch):
     from app.features.auth import service
     from app.features.auth.exceptions import InvalidCredentialsError
-    from app.features.auth.rate_limit import RateCheckResult
+    from app.features.auth.rate_limit import FailureRegistration, RateCheckResult
 
     async def fake_check(redis, ip, eh):
         return RateCheckResult(captcha_required=False, degraded=False)
 
     async def fake_register(redis, ip, eh):
-        pass
+        return FailureRegistration(counter=1, sadd_triggered=False, lockout_triggered=False)
 
     async def fake_get_by_email_hash(eh, db):
         return None

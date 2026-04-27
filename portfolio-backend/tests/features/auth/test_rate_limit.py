@@ -85,3 +85,23 @@ async def test_degraded_reduces_effective_max_attempts(redis):
     for _ in range(settings.LOGIN_MAX_ATTEMPTS_DEGRADED + 1):
         await rate_limit.register_login_failure(redis, "1.1.1.1", "hash-a")
     assert await redis.scard("auth:rl:lockout_ips:hash-a") == 1
+
+
+@pytest.mark.asyncio
+async def test_register_failure_returns_lockout_triggered_when_threshold_crossed(redis):
+    # Trip 2 IPs each over max — no lockout yet (threshold is 3 distinct IPs).
+    for ip in ["1.1.1.1", "2.2.2.2"]:
+        for _ in range(settings.LOGIN_MAX_ATTEMPTS):
+            await rate_limit.register_login_failure(redis, ip, "hash-a")
+        result = await rate_limit.register_login_failure(redis, ip, "hash-a")
+        assert result.lockout_triggered is False
+
+    # 3rd IP crosses threshold → lockout fires once.
+    for _ in range(settings.LOGIN_MAX_ATTEMPTS):
+        await rate_limit.register_login_failure(redis, "3.3.3.3", "hash-a")
+    result = await rate_limit.register_login_failure(redis, "3.3.3.3", "hash-a")
+    assert result.lockout_triggered is True
+
+    # Subsequent failures don't re-trigger.
+    result = await rate_limit.register_login_failure(redis, "3.3.3.3", "hash-a")
+    assert result.lockout_triggered is False
